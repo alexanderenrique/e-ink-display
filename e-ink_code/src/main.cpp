@@ -16,19 +16,27 @@
 #define WIFI_PASSWORD "100BoiledEggs"
 
 // SPI pin configuration for ESP32-C3
-#define SPI_SCK   2   // Serial Clock
-#define SPI_MOSI  3   // Master Out Slave In (data to display)
+#define SPI_SCK   3   // Serial Clock
+#define SPI_MOSI  4   // Master Out Slave In (data to display)
 #define SPI_MISO  -1  // Master In Slave Out (not used for e-ink displays)
 
 // Display configuration for 296x128 e-ink display (3-color: red, black, white)
-#define RST_PIN   4
-#define DC_PIN    5
-#define CS_PIN    6
-#define BUSY_PIN  7
+#define RST_PIN   5
+#define DC_PIN    6
+#define CS_PIN    7
+#define BUSY_PIN  21
 
 // I2C pin configuration for SHT31 sensor
 #define I2C_SDA   9   // Data line
 #define I2C_SCL   10  // Clock line
+
+// Voltage Divider Pins
+#define V_ADC 2
+#define V_SWITCH 8
+#define R1 47000
+#define R2 68000
+#define HIGH_VOLTAGE 4.2
+#define LOW_VOLTAGE 3.3
 
 // SHT31 sensor instance
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
@@ -424,6 +432,9 @@ int renderTextWithWrap(String text, int startX, int startY, int maxWidth, int li
   return yPos + lineHeight;
 }
 
+// Forward declaration
+void displayBatteryPercentage();
+
 // Display function specifically for earthquake facts
 // Format: "Latest Earthquake\nM 4.6 - Location\nDate Time PST/PDT"
 void displayEarthquakeFact(String earthquakeData) {
@@ -438,6 +449,9 @@ void displayEarthquakeFact(String earthquakeData) {
   display.firstPage();
   do {
     display.fillScreen(GxEPD_WHITE);
+    
+    // Display battery percentage in upper right corner
+    displayBatteryPercentage();
     
     // Parse the earthquake data (format: "Latest Earthquake\nM X.X - Location\nDate Time TZ")
     int yPos = 20;
@@ -476,6 +490,119 @@ void displayEarthquakeFact(String earthquakeData) {
   display.hibernate();
 }
 
+int getVoltage(){
+  Serial.println("\n=== getVoltage() Debug ===");
+  
+  // Configure ADC pin attenuation for ESP32-C3
+  // IMPORTANT: ESP32-C3 ADC can only measure up to ~2.5-2.6V max (ADC_ATTEN_DB_11)
+  // Any voltage above ~2.6V will saturate to 4095 (max ADC value)
+  // Voltage divider (R1=47k, R2=68k) scales battery voltage down:
+  //   Scaling factor = R2/(R1+R2) = 68000/115000 = 0.5913
+  //   4.2V battery → 2.48V at ADC (safe, under 2.5V limit)
+  //   3.3V battery → 1.95V at ADC (safe, well under limit)
+  // Set pin as input and configure attenuation
+  pinMode(V_ADC, INPUT);
+  // Use ADC_ATTENDB_MAX for maximum range (~2.5V)
+  analogSetPinAttenuation(V_ADC, ADC_ATTENDB_MAX);
+  
+  // initialize the switch pin as output
+  pinMode(V_SWITCH, OUTPUT);
+
+  Serial.println("Pin configuration:");
+  Serial.println("  V_ADC pin: " + String(V_ADC));
+  Serial.println("  V_SWITCH pin: " + String(V_SWITCH));
+  Serial.println("  R1: " + String(R1) + " ohms");
+  Serial.println("  R2: " + String(R2) + " ohms");
+  Serial.println("  HIGH_VOLTAGE: " + String(HIGH_VOLTAGE) + "V");
+  Serial.println("  LOW_VOLTAGE: " + String(LOW_VOLTAGE) + "V");
+
+  // turn on the switch
+  Serial.println("Turning on voltage switch...");
+  digitalWrite(V_SWITCH,LOW);
+
+  // wait for it to stabilize (not sure if this is needed)
+  delay(100);
+
+  // Read and accumulate millivolt values (this handles ADC conversion automatically)
+  float voltageMilliVoltsSum = 0;
+  Serial.println("Reading voltage values:");
+  for (int i = 0; i < 10; i++) {
+    int milliVolts = analogReadMilliVolts(V_ADC);
+    voltageMilliVoltsSum += milliVolts;
+    Serial.println("  Reading " + String(i+1) + "/10: " + String(milliVolts) + " mV");
+    delay(10); // Small delay between readings
+  }
+  float voltageMilliVolts = voltageMilliVoltsSum / 10.0;
+  float voltageAtADC = voltageMilliVolts / 1000.0;  // Convert mV to V
+  
+  Serial.println("Voltage Statistics:");
+  Serial.println("  Average voltage at ADC pin: " + String(voltageMilliVolts, 2) + " mV (" + String(voltageAtADC, 3) + " V)");
+  
+  // Check for saturation (ESP32-C3 ADC max is ~2.5-2.6V)
+  if (voltageAtADC > 2.6) {
+    Serial.println("  WARNING: Voltage exceeds ADC limit! ADC may be saturated.");
+  }
+
+  // turn off the switch by setting the pin to INPUT (let it float, external pull-up will pull high)
+  Serial.println("Floating voltage switch (set to INPUT, pull-up keeps high)...");
+  pinMode(V_SWITCH, INPUT);
+  delay(100);
+
+  // Calculate battery voltage from voltage divider
+  // Voltage divider: V_ADC = V_battery * (R2 / (R1 + R2))
+  // Therefore: V_battery = V_ADC / (R2 / (R1 + R2))
+  float scalingFactor = (float)R2 / (R1 + R2);
+  float batteryVoltage = voltageAtADC / scalingFactor;
+  
+  Serial.println("\nVoltage Calculation:");
+  Serial.println("  Voltage at ADC pin: " + String(voltageAtADC, 3) + "V");
+  Serial.println("  Scaling factor (R2/(R1+R2)): " + String(scalingFactor, 4));
+  Serial.println("  Calculated battery voltage: " + String(batteryVoltage, 3) + "V");
+  
+  // Warn if calculated battery voltage seems unreasonable (might indicate saturation)
+  if (batteryVoltage > 4.5) {
+    Serial.println("  WARNING: Calculated battery voltage > 4.5V - ADC may be saturated!");
+  }
+  
+  // Calculate percentage based on battery voltage range (3.3V to 4.2V)
+  // Linear interpolation: percentage = ((voltage - LOW_VOLTAGE) / (HIGH_VOLTAGE - LOW_VOLTAGE)) * 100
+  float voltageRange = HIGH_VOLTAGE - LOW_VOLTAGE;
+  float voltagePercentage = ((batteryVoltage - LOW_VOLTAGE) / voltageRange) * 100.0;
+  
+  // Clamp percentage between 0% and 100%
+  if (voltagePercentage < 0.0) voltagePercentage = 0.0;
+  if (voltagePercentage > 100.0) voltagePercentage = 100.0;
+  
+  Serial.println("\nResults:");
+  Serial.println("  Battery voltage: " + String(batteryVoltage, 3) + "V");
+  Serial.println("  Calculated percentage: " + String(voltagePercentage, 2) + "%");
+  Serial.println("  Rounded percentage: " + String((int)(voltagePercentage + 0.5f)) + "%");
+  Serial.println("=== End getVoltage() Debug ===\n");
+
+  return (int)(voltagePercentage + 0.5f);
+}
+
+// Helper function to display battery percentage in upper right corner in red
+void displayBatteryPercentage() {
+  int batteryPercent = getVoltage();
+  String batteryText = String(batteryPercent) + "%";
+  
+  // Get text bounds to position in upper right corner
+  int16_t x1, y1;
+  uint16_t w, h;
+  display.getTextBounds(batteryText, 0, 0, &x1, &y1, &w, &h);
+  
+  // Position in upper right corner with padding (10 pixels from right edge, 10 pixels from top)
+  int displayWidth = display.width();
+  int xPos = displayWidth - w - 10;
+  int yPos = 10;
+  
+  // Display in red
+  display.setTextColor(GxEPD_RED);
+  display.setCursor(xPos, yPos);
+  display.print(batteryText);
+}
+
 // Display function for ISS data
 void displayISSData(String issData) {
   // Reinitialize SPI if it was disabled
@@ -489,6 +616,9 @@ void displayISSData(String issData) {
   display.firstPage();
   do {
     display.fillScreen(GxEPD_WHITE);
+    
+    // Display battery percentage in upper right corner
+    displayBatteryPercentage();
     
     // Parse the ISS data (format: "Where is the ISS?\nLat, Long\nAlt KM / Miles\nVel KPH / MPH")
     int yPos = 20;
@@ -541,6 +671,9 @@ void displayDefault(String fact) {
   display.firstPage();
   do {
     display.fillScreen(GxEPD_WHITE);
+    
+    // Display battery percentage in upper right corner
+    displayBatteryPercentage();
     
     // Split by first newline to separate first line from rest
     int newlinePos = fact.indexOf('\n');
@@ -615,6 +748,7 @@ String getRoomData() {
   Serial.print(getWifiStatusString(wifiStatusAfter));
   Serial.println(")");
   
+  // Only add WiFi info to display if connected
   if (wifiStatusAfter == WL_CONNECTED) {
     Serial.println("[DEBUG] WiFi is connected, getting strength...");
     int strength = checkWifiStrength();
@@ -638,14 +772,8 @@ String getRoomData() {
     Serial.print("[DEBUG] Strength description: ");
     Serial.println(strengthDesc);
     result += String("\nWiFi:") + String(strength) + " dBm (" + strengthDesc + ")";
-  } else {
-    Serial.print("[DEBUG] WiFi not connected. Status code: ");
-    Serial.print(wifiStatusAfter);
-    Serial.print(" (");
-    Serial.print(getWifiStatusString(wifiStatusAfter));
-    Serial.println(")");
-    result += String("\nWiFi not connected");
   }
+  // If WiFi is not connected, nothing WiFi-related is added to the result
   return result;
 }
 
@@ -817,10 +945,10 @@ void loop() {
   Serial.println("SPI disabled after display update");
   
   // Cycle to next display mode (0-3, then back to 0)
-  displayMode = (displayMode + 1) % 5;
+  // displayMode = (displayMode + 1) % 5;
 
   // 30000 milliseconds is 30 seconds, which is 0.5 minutes
-  delay(100000); // 5 minutes
+  delay(30000); // 30 seconds
   
   // Enter deep sleep for 5 minutes (300 seconds)
   // On wake, the device will restart and run setup() again
