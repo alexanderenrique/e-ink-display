@@ -35,7 +35,7 @@
 #define V_SWITCH 8
 #define R1 47000
 #define R2 68000
-#define HIGH_VOLTAGE 4.2
+#define HIGH_VOLTAGE 4.15
 #define LOW_VOLTAGE 3.3
 
 // SHT31 sensor instance
@@ -592,10 +592,10 @@ void displayBatteryPercentage() {
   uint16_t w, h;
   display.getTextBounds(batteryText, 0, 0, &x1, &y1, &w, &h);
   
-  // Position in upper right corner with padding (10 pixels from right edge, 10 pixels from top)
+  // Position in upper right corner with padding (10 pixels from right edge, aligned with header text)
   int displayWidth = display.width();
   int xPos = displayWidth - w - 10;
-  int yPos = 10;
+  int yPos = 20;
   
   // Display in red
   display.setTextColor(GxEPD_RED);
@@ -945,10 +945,10 @@ void loop() {
   Serial.println("SPI disabled after display update");
   
   // Cycle to next display mode (0-3, then back to 0)
-  // displayMode = (displayMode + 1) % 5;
+  displayMode = (displayMode + 1) % 5;
 
   // 30000 milliseconds is 30 seconds, which is 0.5 minutes
-  delay(30000); // 30 seconds
+  delay(150000); // 5 minutes
   
   // Enter deep sleep for 5 minutes (300 seconds)
   // On wake, the device will restart and run setup() again
