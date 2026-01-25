@@ -16,15 +16,15 @@
 #define WIFI_PASSWORD "100BoiledEggs"
 
 // SPI pin configuration for ESP32-C3
-#define SPI_SCK   3   // Serial Clock
-#define SPI_MOSI  4   // Master Out Slave In (data to display)
+#define SPI_SCK   21   // Serial Clock
+#define SPI_MOSI  7   // Master Out Slave In (data to display)
 #define SPI_MISO  -1  // Master In Slave Out (not used for e-ink displays)
 
 // Display configuration for 296x128 e-ink display (3-color: red, black, white)
-#define RST_PIN   5
-#define DC_PIN    6
-#define CS_PIN    7
-#define BUSY_PIN  21
+#define RST_PIN   6
+#define DC_PIN    5
+#define CS_PIN    4
+#define BUSY_PIN  3
 
 // I2C pin configuration for SHT31 sensor
 #define I2C_SDA   9   // Data line
