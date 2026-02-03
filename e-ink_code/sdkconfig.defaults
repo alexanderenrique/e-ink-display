@@ -1,0 +1,15 @@
+# Bluetooth Configuration
+# Enable Bluetooth
+CONFIG_BT_ENABLED=y
+
+# Use nimBLE stack (lightweight BLE-only stack)
+CONFIG_BT_NIMBLE_ENABLED=y
+
+# Disable Bluedroid (classic Bluetooth stack)
+CONFIG_BT_BLUEDROID_ENABLED=n
+
+# Disable Classic Bluetooth
+CONFIG_BT_CLASSIC_ENABLED=n
+
+# Use BLE-only mode
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
