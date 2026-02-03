@@ -1,0 +1,13 @@
+{
+  "refresh_ms": 60000,
+  "modules": {
+    "room": true,
+    "meow_fact": false,
+    "Earthquakes": false,
+    "Iss_location": false,
+    "useless_fact": true
+  },
+  "messages_url": "https://ota.denton.works/messages",
+  "messages_key": "",
+  "key": "dillon-secret"
+}

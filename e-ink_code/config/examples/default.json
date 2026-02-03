@@ -1,0 +1,13 @@
+{
+  "refresh_ms": 300000,
+  "modules": {
+    "room": true,
+    "meow_fact": true,
+    "Earthquakes": false,
+    "Iss_location": true,
+    "useless_fact": true
+  },
+  "messages_url": "https://ota.denton.works/messages",
+  "messages_key": "",
+  "key": "are ya with me"
+}
