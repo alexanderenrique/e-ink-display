@@ -18,6 +18,9 @@
 *.bin
 *.hex
 
+# Python
+e-ink_code/venv/
+
 # Cache
 .cache/
 compile_commands.json
