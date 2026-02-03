@@ -102,14 +102,28 @@
         server = await device.gatt.connect();
         log('GATT connected');
 
-        const services = await server.getPrimaryServices();
-        log('Primary services: ' + services.length);
-        for (const s of services) {
-          log('  Service: ' + s.uuid);
-          const chars = await s.getCharacteristics();
-          for (const c of chars) {
-            log('    Characteristic: ' + c.uuid + ' (props: ' + [...c.properties].join(',') + ')');
+        try {
+          const services = await server.getPrimaryServices();
+          log('Primary services: ' + services.length);
+          if (services.length === 0) {
+            log('ERROR: No services found!');
+            throw new Error('No Services found in device');
           }
+          for (const s of services) {
+            log('  Service: ' + s.uuid);
+            try {
+              const chars = await s.getCharacteristics();
+              log('    Characteristics: ' + chars.length);
+              for (const c of chars) {
+                log('      Characteristic: ' + c.uuid + ' (props: ' + [...c.properties].join(',') + ')');
+              }
+            } catch (charError) {
+              log('    ERROR getting characteristics: ' + charError.message);
+            }
+          }
+        } catch (serviceError) {
+          log('ERROR getting services: ' + serviceError.message);
+          throw serviceError;
         }
 
         device.addEventListener('gattserverdisconnected', onDisconnected);

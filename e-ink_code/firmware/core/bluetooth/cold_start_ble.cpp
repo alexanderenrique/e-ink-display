@@ -15,8 +15,18 @@
 #define COLD_START_BLE_DEVICE_NAME "E-Ink Display"
 #endif
 
-// Custom 128-bit service UUID (advertised so scanners can filter by this service)
-#define COLD_START_SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+// Standard Device Information Service UUID (0x180A) - helps with service discovery
+#define DEVICE_INFO_SERVICE_UUID "180A"
+
+// Custom service UUID matching web client expectations
+#define COLD_START_SERVICE_UUID "0000ff00-0000-1000-8000-00805f9b34fb"
+
+// Standard Model Number String characteristic UUID (0x2A24) for Device Information Service
+#define MODEL_NUMBER_CHAR_UUID "2A24"
+
+// TX and RX characteristic UUIDs matching web client expectations
+#define COLD_START_TX_CHAR_UUID "0000ff01-0000-1000-8000-00805f9b34fb"
+#define COLD_START_RX_CHAR_UUID "0000ff02-0000-1000-8000-00805f9b34fb"
 
 /** Callback that sets a flag when a central connects. */
 class ColdStartBleServerCallbacks : public NimBLEServerCallbacks {
@@ -32,6 +42,115 @@ public:
 
 private:
     bool* _connectedFlag;
+};
+
+/** Callback that handles data written to the TX characteristic. */
+class ColdStartBleTxCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    void onWrite(NimBLECharacteristic* pCharacteristic) override {
+        Serial.println("[ColdStartBle] ========================================");
+        Serial.println("[ColdStartBle] DATA RECEIVED VIA BLE");
+        Serial.println("[ColdStartBle] ========================================");
+        
+        // Get the value that was written
+        std::string value = pCharacteristic->getValue();
+        size_t length = value.length();
+        
+        Serial.print("[ColdStartBle] Characteristic UUID: ");
+        Serial.println(pCharacteristic->getUUID().toString().c_str());
+        Serial.print("[ColdStartBle] Data length: ");
+        Serial.print(length);
+        Serial.println(" bytes");
+        
+        if (length == 0) {
+            Serial.println("[ColdStartBle] WARNING: Received empty data!");
+            return;
+        }
+        
+        // Print raw bytes (decimal)
+        Serial.print("[ColdStartBle] Raw bytes (decimal, first 100): ");
+        size_t previewLen = (length > 100) ? 100 : length;
+        for (size_t i = 0; i < previewLen; i++) {
+            if (i > 0) Serial.print(" ");
+            Serial.print((uint8_t)value[i]);
+        }
+        if (length > 100) {
+            Serial.print(" ... (truncated, showing first 100 of ");
+            Serial.print(length);
+            Serial.println(" bytes)");
+        } else {
+            Serial.println();
+        }
+        
+        // Print raw bytes (hex)
+        Serial.print("[ColdStartBle] Raw bytes (hex, first 100): ");
+        for (size_t i = 0; i < previewLen; i++) {
+            if (i > 0) Serial.print(" ");
+            uint8_t byte = (uint8_t)value[i];
+            if (byte < 0x10) Serial.print("0");
+            Serial.print(byte, HEX);
+        }
+        if (length > 100) {
+            Serial.print(" ... (truncated)");
+        }
+        Serial.println();
+        
+        // Try to interpret as string/JSON
+        Serial.println("[ColdStartBle] Attempting to decode as string...");
+        String jsonString = "";
+        for (size_t i = 0; i < length; i++) {
+            char c = value[i];
+            if (c >= 32 && c <= 126) {  // Printable ASCII
+                jsonString += c;
+            } else {
+                jsonString += "?";
+            }
+        }
+        
+        Serial.print("[ColdStartBle] Decoded string length: ");
+        Serial.println(jsonString.length());
+        Serial.print("[ColdStartBle] Decoded string (first 200 chars): ");
+        if (jsonString.length() > 200) {
+            Serial.println(jsonString.substring(0, 200));
+            Serial.print("[ColdStartBle] ... (truncated, total length: ");
+            Serial.print(jsonString.length());
+            Serial.println(" chars)");
+        } else {
+            Serial.println(jsonString);
+        }
+        
+        // Check if it looks like JSON
+        if (jsonString.startsWith("{") && jsonString.endsWith("}")) {
+            Serial.println("[ColdStartBle] ✓ Detected JSON format");
+        } else {
+            Serial.println("[ColdStartBle] ⚠ Does not appear to be JSON");
+        }
+        
+        // Print byte-by-byte analysis for first 20 bytes
+        Serial.println("[ColdStartBle] Byte-by-byte analysis (first 20):");
+        size_t analysisLen = (length > 20) ? 20 : length;
+        for (size_t i = 0; i < analysisLen; i++) {
+            uint8_t byte = (uint8_t)value[i];
+            Serial.print("[ColdStartBle]   [");
+            Serial.print(i);
+            Serial.print("] ");
+            Serial.print(byte);
+            Serial.print(" (0x");
+            if (byte < 0x10) Serial.print("0");
+            Serial.print(byte, HEX);
+            Serial.print(") = '");
+            if (byte >= 32 && byte <= 126) {
+                Serial.print((char)byte);
+            } else {
+                Serial.print("?");
+            }
+            Serial.println("'");
+        }
+        
+        Serial.println("[ColdStartBle] ========================================");
+        Serial.println("[ColdStartBle] END OF DATA RECEIVED");
+        Serial.println("[ColdStartBle] ========================================");
+    }
 };
 
 ColdStartBle::ColdStartBle() : _active(false), _startMillis(0), _connected(false) {}
@@ -77,21 +196,86 @@ void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause) {
 
     pServer->setCallbacks(new ColdStartBleServerCallbacks(&_connected));
 
-    // Create and start service (must start service before advertising)
+    // Create standard Device Information Service (0x180A) for better discoverability
+    NimBLEService* pDeviceInfoService = pServer->createService(DEVICE_INFO_SERVICE_UUID);
+    if (!pDeviceInfoService) {
+        NimBLEDevice::deinit(true);
+        Serial.println("[ColdStartBle] ERROR: Failed to create Device Information Service");
+        return;
+    }
+    
+    // Add Model Number characteristic to Device Information Service
+    NimBLECharacteristic* pModelChar = pDeviceInfoService->createCharacteristic(
+        MODEL_NUMBER_CHAR_UUID,
+        NIMBLE_PROPERTY::READ
+    );
+    if (pModelChar) {
+        pModelChar->setValue("E-Ink Display");
+        Serial.println("[ColdStartBle] Device Information Service characteristic created");
+    }
+    
+    if (!pDeviceInfoService->start()) {
+        NimBLEDevice::deinit(true);
+        Serial.println("[ColdStartBle] ERROR: Failed to start Device Information Service");
+        return;
+    }
+    Serial.println("[ColdStartBle] Device Information Service (0x180A) created and started");
+
+    // Create custom service (characteristics must be created BEFORE starting the service)
     NimBLEService* pService = pServer->createService(COLD_START_SERVICE_UUID);
     if (!pService) {
         NimBLEDevice::deinit(true);
         Serial.println("[ColdStartBle] ERROR: Failed to create BLE service");
         return;
     }
+    Serial.println("[ColdStartBle] Custom BLE service created");
+
+    // Create TX characteristic (for receiving data from client)
+    NimBLECharacteristic* pTxChar = pService->createCharacteristic(
+        COLD_START_TX_CHAR_UUID,
+        NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+    );
+    if (!pTxChar) {
+        NimBLEDevice::deinit(true);
+        Serial.println("[ColdStartBle] ERROR: Failed to create TX characteristic");
+        return;
+    }
+    Serial.println("[ColdStartBle] TX characteristic created");
+    Serial.print("  - TX Characteristic UUID: ");
+    Serial.println(COLD_START_TX_CHAR_UUID);
+    
+    // Register callback to handle incoming data
+    pTxChar->setCallbacks(new ColdStartBleTxCallbacks());
+    Serial.println("[ColdStartBle] TX characteristic callback registered - ready to receive data");
+
+    // Create RX characteristic (for sending data to client)
+    NimBLECharacteristic* pRxChar = pService->createCharacteristic(
+        COLD_START_RX_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    if (!pRxChar) {
+        NimBLEDevice::deinit(true);
+        Serial.println("[ColdStartBle] ERROR: Failed to create RX characteristic");
+        return;
+    }
+    Serial.println("[ColdStartBle] RX characteristic created");
+    Serial.print("  - RX Characteristic UUID: ");
+    Serial.println(COLD_START_RX_CHAR_UUID);
+
+    // NOW start the service (after all characteristics are created)
     if (!pService->start()) {
         NimBLEDevice::deinit(true);
         Serial.println("[ColdStartBle] ERROR: Failed to start BLE service");
         return;
     }
-    Serial.println("[ColdStartBle] BLE service created and started");
+    Serial.println("[ColdStartBle] Custom BLE service started");
 
-    // Configure advertising: addServiceUUID then start (order: service->start(); adv->addServiceUUID(); adv->start();)
+    // CRITICAL: Start the GATT server after all services are created and started
+    // This makes the services discoverable to clients
+    pServer->start();
+    Serial.println("[ColdStartBle] GATT server started - services are now discoverable");
+
+    // Configure advertising: addServiceUUID then start (order: service->start(); server->start(); adv->addServiceUUID(); adv->start();)
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     if (!pAdvertising) {
         NimBLEDevice::deinit(true);
@@ -99,27 +283,31 @@ void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause) {
         return;
     }
     
-    // Set advertising parameters: advertise our custom service UUID for filtering
-    pAdvertising->addServiceUUID(COLD_START_SERVICE_UUID);
-    pAdvertising->setScanResponse(true);
-    // setConnectableMode/setPreferredParams require NimBLE-Arduino 2.x; 1.4.x uses defaults (connectable when server present)
-    pAdvertising->setMinInterval(0x20);  // 32 * 0.625ms = 20ms
-    pAdvertising->setMaxInterval(0x40);  // 64 * 0.625ms = 40ms
+    // CRITICAL: Add all service UUIDs to advertising - this makes them visible in scan results
+    // Add both the custom service and Device Information Service so they're discoverable
+    pAdvertising->addServiceUUID(pService->getUUID());
+    pAdvertising->addServiceUUID(pDeviceInfoService->getUUID());
     
-    // Explicitly set device name in advertising data (important for discoverability)
-    pAdvertising->setName(COLD_START_BLE_DEVICE_NAME);
+    // Enable scan response for better discoverability
+    pAdvertising->setScanResponse(true);
+    
+    // Add TX power to advertising data (uses power level set via NimBLEDevice::setPower)
+    pAdvertising->addTxPower();
     
     Serial.println("[ColdStartBle] Advertising configured:");
     Serial.print("  - Device name: ");
     Serial.println(COLD_START_BLE_DEVICE_NAME);
-    Serial.print("  - Service UUID: ");
+    Serial.print("  - Custom Service UUID: ");
     Serial.println(COLD_START_SERVICE_UUID);
+    Serial.print("  - Device Info Service UUID: ");
+    Serial.println(DEVICE_INFO_SERVICE_UUID);
+    Serial.println("  - TX power: added to advertising data");
     
     // Small delay to ensure BLE stack is ready
     delay(200);
 
     // Start advertising (after service started and adv data set)
-    if (!NimBLEDevice::startAdvertising()) {
+    if (!pAdvertising->start()) {
         NimBLEDevice::deinit(true);
         Serial.println("[ColdStartBle] ERROR: Failed to start advertising");
         return;

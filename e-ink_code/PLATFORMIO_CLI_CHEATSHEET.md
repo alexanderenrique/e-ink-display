@@ -1,5 +1,18 @@
 # PlatformIO CLI Cheat Sheet
 
+# Clean build files
+
+
+pio run --target clean
+pio run -e seeed_xiao_fun -t upload
+pio device monitor
+
+# Start the ble monitor
+
+cd scripts
+python3 scan_ble.py
+cd ..
+
 ## Installation
 
 ```bash
