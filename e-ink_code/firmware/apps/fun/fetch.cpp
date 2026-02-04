@@ -18,7 +18,6 @@ void initI2C() {
     
     // Initialize SHT31 sensor
     if (sht31.begin(0x44)) { // Default I2C address is 0x44
-        Serial.println("SHT31 sensor initialized successfully!");
     } else {
         Serial.println("SHT31 sensor initialization failed!");
     }

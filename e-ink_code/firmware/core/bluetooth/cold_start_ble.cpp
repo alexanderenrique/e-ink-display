@@ -30,239 +30,87 @@
 #define COLD_START_TX_CHAR_UUID "0000ff01-0000-1000-8000-00805f9b34fb"
 #define COLD_START_RX_CHAR_UUID "0000ff02-0000-1000-8000-00805f9b34fb"
 
-/** Callback that sets a flag when a central connects. */
+#define PENDING_CONFIG_MAX 2048
+
+// Pending config: filled by BLE callback, processed in main loop (avoids crash from heavy work in BLE task)
+static char s_pendingConfigBuffer[PENDING_CONFIG_MAX];
+static size_t s_pendingConfigLength = 0;
+static bool s_pendingConfig = false;
+
+/** Callback that sets a flag when a central connects.
+ *  Keep this minimal (no Serial, no allocation): runs in BLE task context; heavy work can crash.
+ */
 class ColdStartBleServerCallbacks : public NimBLEServerCallbacks {
 public:
     explicit ColdStartBleServerCallbacks(bool* connectedFlag) : _connectedFlag(connectedFlag) {}
     void onConnect(NimBLEServer* /*pServer*/) override {
         *_connectedFlag = true;
-        Serial.println("[ColdStartBle] Client connected");
     }
     void onDisconnect(NimBLEServer* /*pServer*/) override {
-        Serial.println("[ColdStartBle] Client disconnected");
+        *_connectedFlag = false;
     }
 
 private:
     bool* _connectedFlag;
 };
 
-/** Callback that handles data written to the TX characteristic. */
+/** Callback that handles data written to the TX characteristic.
+ *  Only copies payload to a buffer and sets a flag. Heavy work (Preferences, restart)
+ *  is done in ColdStartBle::loop() to avoid crashing (BLE callbacks run in BLE task).
+ */
 class ColdStartBleTxCallbacks : public NimBLECharacteristicCallbacks {
 public:
     void onWrite(NimBLECharacteristic* pCharacteristic) override {
-        Serial.println("[ColdStartBle] ========================================");
-        Serial.println("[ColdStartBle] DATA RECEIVED VIA BLE");
-        Serial.println("[ColdStartBle] ========================================");
-        
-        // Get the value that was written
         std::string value = pCharacteristic->getValue();
         size_t length = value.length();
-        
-        Serial.print("[ColdStartBle] Characteristic UUID: ");
-        Serial.println(pCharacteristic->getUUID().toString().c_str());
-        Serial.print("[ColdStartBle] Data length: ");
-        Serial.print(length);
-        Serial.println(" bytes");
-        
-        if (length == 0) {
-            Serial.println("[ColdStartBle] WARNING: Received empty data!");
-            return;
-        }
-        
-        // Print raw bytes (decimal)
-        Serial.print("[ColdStartBle] Raw bytes (decimal, first 100): ");
-        size_t previewLen = (length > 100) ? 100 : length;
-        for (size_t i = 0; i < previewLen; i++) {
-            if (i > 0) Serial.print(" ");
-            Serial.print((uint8_t)value[i]);
-        }
-        if (length > 100) {
-            Serial.print(" ... (truncated, showing first 100 of ");
-            Serial.print(length);
-            Serial.println(" bytes)");
-        } else {
-            Serial.println();
-        }
-        
-        // Print raw bytes (hex)
-        Serial.print("[ColdStartBle] Raw bytes (hex, first 100): ");
-        for (size_t i = 0; i < previewLen; i++) {
-            if (i > 0) Serial.print(" ");
-            uint8_t byte = (uint8_t)value[i];
-            if (byte < 0x10) Serial.print("0");
-            Serial.print(byte, HEX);
-        }
-        if (length > 100) {
-            Serial.print(" ... (truncated)");
-        }
-        Serial.println();
-        
-        // Try to interpret as string/JSON
-        Serial.println("[ColdStartBle] Attempting to decode as string...");
-        String jsonString = "";
-        for (size_t i = 0; i < length; i++) {
-            char c = value[i];
-            if (c >= 32 && c <= 126) {  // Printable ASCII
-                jsonString += c;
-            } else {
-                jsonString += "?";
-            }
-        }
-        
-        Serial.print("[ColdStartBle] Decoded string length: ");
-        Serial.println(jsonString.length());
-        Serial.print("[ColdStartBle] Decoded string (first 200 chars): ");
-        if (jsonString.length() > 200) {
-            Serial.println(jsonString.substring(0, 200));
-            Serial.print("[ColdStartBle] ... (truncated, total length: ");
-            Serial.print(jsonString.length());
-            Serial.println(" chars)");
-        } else {
-            Serial.println(jsonString);
-        }
-        
-        // Check if it looks like JSON
-        if (jsonString.startsWith("{") && jsonString.endsWith("}")) {
-            Serial.println("[ColdStartBle] ✓ Detected JSON format");
-            
-            // Parse JSON configuration
-            Serial.println("[ColdStartBle] Parsing JSON configuration...");
-            DynamicJsonDocument doc(2048);
-            DeserializationError error = deserializeJson(doc, jsonString);
-            
-            if (error) {
-                Serial.print("[ColdStartBle] JSON parse error: ");
-                Serial.println(error.c_str());
-                Serial.println("[ColdStartBle] ========================================");
-                Serial.println("[ColdStartBle] END OF DATA RECEIVED (PARSE FAILED)");
-                Serial.println("[ColdStartBle] ========================================");
-                return;
-            }
-            
-            Serial.println("[ColdStartBle] ✓ JSON parsed successfully");
-            
-            // Store configuration in Preferences
-            Preferences preferences;
-            preferences.begin("config", false); // false = read/write mode
-            
-            // Store WiFi credentials if provided
-            // Check for both "wifiSSID" and "wifiSsid" variants (JSON key case sensitivity)
-            const char* wifiSSID = nullptr;
-            if (doc.containsKey("wifiSSID")) {
-                wifiSSID = doc["wifiSSID"];
-            } else if (doc.containsKey("wifiSsid")) {
-                wifiSSID = doc["wifiSsid"];
-            }
-            
-            if (wifiSSID != nullptr) {
-                preferences.putString("wifiSSID", wifiSSID);
-                Serial.print("[ColdStartBle] Stored WiFi SSID: ");
-                Serial.println(wifiSSID);
-            } else {
-                Serial.println("[ColdStartBle] ⚠ No wifiSSID or wifiSsid in config");
-            }
-            
-            if (doc.containsKey("wifiPassword")) {
-                const char* wifiPassword = doc["wifiPassword"];
-                preferences.putString("wifiPassword", wifiPassword);
-                Serial.print("[ColdStartBle] Stored WiFi Password: ");
-                Serial.println("*** (hidden)");
-            } else {
-                Serial.println("[ColdStartBle] ⚠ No wifiPassword in config");
-            }
-            
-            // Store app mode
-            if (doc.containsKey("mode")) {
-                const char* mode = doc["mode"];
-                preferences.putString("mode", mode);
-                Serial.print("[ColdStartBle] Stored mode: ");
-                Serial.println(mode);
-            }
-            
-            // Store refresh interval (in minutes)
-            if (doc.containsKey("refreshInterval")) {
-                uint32_t refreshInterval = doc["refreshInterval"];
-                preferences.putUInt("refreshInterval", refreshInterval);
-                Serial.print("[ColdStartBle] Stored refreshInterval: ");
-                Serial.print(refreshInterval);
-                Serial.println(" minutes");
-            }
-            
-            // Store timestamp
-            if (doc.containsKey("timestamp")) {
-                uint64_t timestamp = doc["timestamp"];
-                preferences.putULong64("timestamp", timestamp);
-                Serial.print("[ColdStartBle] Stored timestamp: ");
-                Serial.println(timestamp);
-            }
-            
-            // Store APIs config as JSON string (nested object)
-            if (doc.containsKey("apis") && doc["apis"].is<JsonObject>()) {
-                String apisJson;
-                serializeJson(doc["apis"], apisJson);
-                preferences.putString("apis", apisJson);
-                Serial.print("[ColdStartBle] Stored APIs config: ");
-                Serial.println(apisJson);
-            }
-            
-            // Store full config JSON for app manager
-            preferences.putString("configJson", jsonString);
-            Serial.println("[ColdStartBle] Stored full config JSON");
-            
-            // Set flag to skip BLE on next boot (after restart)
-            // Note: ESP32 Preferences key max length is 15 characters
-            bool flagSet = preferences.putBool("skipBLE", true);
-            Serial.print("[ColdStartBle] Set skipBLE flag: ");
-            Serial.println(flagSet ? "SUCCESS" : "FAILED");
-            
-            // Verify the flag was set
-            bool flagVerify = preferences.getBool("skipBLE", false);
-            Serial.print("[ColdStartBle] Verified skipBLE flag: ");
-            Serial.println(flagVerify ? "TRUE" : "FALSE");
-            
-            preferences.end();
-            Serial.println("[ColdStartBle] ✓ Configuration saved to Preferences");
-            
-            // Flush serial and give Preferences time to commit
-            Serial.flush();
-            delay(1000);  // Give Preferences time to commit to NVS
-            
-            // Restart to apply the new configuration
-            Serial.println("[ColdStartBle] Restarting device to apply configuration...");
-            Serial.flush();
-            delay(500);
-            ESP.restart();
-            
-        } else {
-            Serial.println("[ColdStartBle] ⚠ Does not appear to be JSON");
-        }
-        
-        // Print byte-by-byte analysis for first 20 bytes
-        Serial.println("[ColdStartBle] Byte-by-byte analysis (first 20):");
-        size_t analysisLen = (length > 20) ? 20 : length;
-        for (size_t i = 0; i < analysisLen; i++) {
-            uint8_t byte = (uint8_t)value[i];
-            Serial.print("[ColdStartBle]   [");
-            Serial.print(i);
-            Serial.print("] ");
-            Serial.print(byte);
-            Serial.print(" (0x");
-            if (byte < 0x10) Serial.print("0");
-            Serial.print(byte, HEX);
-            Serial.print(") = '");
-            if (byte >= 32 && byte <= 126) {
-                Serial.print((char)byte);
-            } else {
-                Serial.print("?");
-            }
-            Serial.println("'");
-        }
-        
-        Serial.println("[ColdStartBle] ========================================");
-        Serial.println("[ColdStartBle] END OF DATA RECEIVED");
-        Serial.println("[ColdStartBle] ========================================");
+        if (length == 0 || s_pendingConfig) return;
+        size_t copyLen = (length < PENDING_CONFIG_MAX) ? length : (PENDING_CONFIG_MAX - 1);
+        memcpy(s_pendingConfigBuffer, value.data(), copyLen);
+        s_pendingConfigBuffer[copyLen] = '\0';
+        s_pendingConfigLength = copyLen;
+        s_pendingConfig = true;
     }
 };
+
+/** Process config received via BLE. Called from main loop (not from BLE callback). */
+static void processPendingConfig() {
+    String jsonString(s_pendingConfigBuffer);
+    s_pendingConfigLength = 0;
+    if (jsonString.length() == 0 || !jsonString.startsWith("{") || !jsonString.endsWith("}")) {
+        Serial.println("[ColdStartBle] Pending config invalid or not JSON, ignoring");
+        return;
+    }
+    Serial.println("[ColdStartBle] Processing received config...");
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, jsonString);
+    if (error) {
+        Serial.print("[ColdStartBle] JSON parse error: ");
+        Serial.println(error.c_str());
+        return;
+    }
+    Preferences preferences;
+    preferences.begin("config", false);
+    const char* wifiSSID = nullptr;
+    if (doc.containsKey("wifiSSID")) wifiSSID = doc["wifiSSID"];
+    else if (doc.containsKey("wifiSsid")) wifiSSID = doc["wifiSsid"];
+    if (wifiSSID != nullptr) preferences.putString("wifiSSID", wifiSSID);
+    if (doc.containsKey("wifiPassword")) preferences.putString("wifiPassword", doc["wifiPassword"].as<const char*>());
+    if (doc.containsKey("mode")) preferences.putString("mode", doc["mode"].as<const char*>());
+    if (doc.containsKey("refreshInterval")) preferences.putUInt("refreshInterval", doc["refreshInterval"].as<uint32_t>());
+    if (doc.containsKey("timestamp")) preferences.putULong64("timestamp", doc["timestamp"].as<uint64_t>());
+    if (doc.containsKey("apis") && doc["apis"].is<JsonObject>()) {
+        String apisJson;
+        serializeJson(doc["apis"], apisJson);
+        preferences.putString("apis", apisJson);
+    }
+    preferences.putString("configJson", jsonString);
+    preferences.putBool("skipBLE", true);
+    preferences.end();
+    Serial.println("[ColdStartBle] Configuration saved, restarting...");
+    Serial.flush();
+    delay(1000);
+    ESP.restart();
+}
 
 ColdStartBle::ColdStartBle() : _active(false), _startMillis(0), _connected(false) {}
 
@@ -436,16 +284,35 @@ void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause) {
     _active = true;
     _startMillis = millis();
     _connected = false;
-    Serial.println("[ColdStartBle] BLE enabled for 60s or until connected (cold start)");
+    Serial.println("[ColdStartBle] BLE enabled for 3 minutes or until connected (cold start)");
 }
 
 void ColdStartBle::loop() {
+    // Config received in BLE callback: process in main loop to avoid crash (no heavy work in BLE task)
+    if (s_pendingConfig) {
+        s_pendingConfig = false;
+        NimBLEDevice::deinit(true);
+        _active = false;
+        processPendingConfig();
+        return;
+    }
+
     if (!_active) {
         return;
     }
 
     uint32_t elapsed = (uint32_t)(millis() - _startMillis);
     bool timeout = (elapsed >= (COLD_START_BLE_WINDOW_SECONDS * 1000u));
+
+    // Log connection state changes from main loop (not from BLE callback, to avoid crash)
+    static bool lastConnected = false;
+    if (_connected && !lastConnected) {
+        Serial.println("[ColdStartBle] Client connected");
+    }
+    if (!_connected && lastConnected) {
+        Serial.println("[ColdStartBle] Client disconnected");
+    }
+    lastConnected = _connected;
     
     // Print status every 5 seconds with more details
     static uint32_t lastStatusPrint = 0;
@@ -469,13 +336,15 @@ void ColdStartBle::loop() {
         lastStatusPrint = elapsed;
     }
 
-    if (_connected || timeout) {
+    // Only disable BLE when the window has timed out and no one is connected.
+    // While a client is connected we stay up so they can discover services and send config.
+    if (timeout && !_connected) {
         NimBLEDevice::deinit(true);
         _active = false;
-        if (_connected) {
-            Serial.println("[ColdStartBle] BLE disabled after connection");
+        if (lastConnected) {
+            Serial.println("[ColdStartBle] BLE disabled (client disconnected)");
         } else {
-            Serial.println("[ColdStartBle] BLE disabled after 60s window");
+            Serial.println("[ColdStartBle] BLE disabled after timeout");
         }
     }
 }

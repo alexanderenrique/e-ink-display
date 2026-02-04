@@ -42,9 +42,14 @@ bool FunApp::configure(const JsonObject& config) {
         Serial.println(" minutes");
     }
     
-    // TODO: Handle APIs config if needed
-    if (config.containsKey("apis")) {
-        Serial.println("[FunApp] APIs config received (not yet implemented)");
+    // API toggles: only enabled APIs are shown when cycling
+    if (config.containsKey("apis") && config["apis"].is<JsonObject>()) {
+        JsonObject apis = config["apis"].as<JsonObject>();
+        if (apis.containsKey("room_data")) _apiRoomData = apis["room_data"].as<bool>();
+        if (apis.containsKey("cat_facts")) _apiCatFacts = apis["cat_facts"].as<bool>();
+        if (apis.containsKey("earthquake")) _apiEarthquake = apis["earthquake"].as<bool>();
+        if (apis.containsKey("iss")) _apiISS = apis["iss"].as<bool>();
+        if (apis.containsKey("useless_facts")) _apiUselessFacts = apis["useless_facts"].as<bool>();
     }
     
     return true;
@@ -57,18 +62,16 @@ void FunApp::loop() {
         batteryPercent = _power->getBatteryPercentage();
     }
     
-    // Rotate between different data sources
-    // Mode 0: Room temperature and humidity (no WiFi needed)
-    // Mode 1: Earthquake data (WiFi needed)
-    // Mode 2: Meow fact (WiFi needed)
-    // Mode 3: ISS data (WiFi needed)
-    // Mode 4: Useless fact (WiFi needed)
+    // Skip disabled modes so we only show content for APIs enabled in config
+    for (int i = 0; i < 5 && !isModeEnabled(displayMode); i++) {
+        displayMode = (displayMode + 1) % 5;
+    }
     
+    // Mode 0: Room temperature and humidity (no WiFi needed)
+    // Mode 1: Earthquake, 2: Meow fact, 3: ISS, 4: Useless fact (WiFi needed)
     if (displayMode == 0) {
         // Display temperature and humidity from SHT31 sensor (no WiFi needed)
-        Serial.println("Reading room data...");
         String roomData = getRoomData();
-        Serial.println("Room Data: " + roomData);
         if (_display) {
             renderDefault(_display, roomData, batteryPercent);
         }
@@ -217,6 +220,23 @@ void FunApp::handleOTA() {
     }
 }
 
+bool FunApp::isModeEnabled(int mode) const {
+    switch (mode) {
+        case 0: return _apiRoomData;
+        case 1: return _apiEarthquake;
+        case 2: return _apiCatFacts;
+        case 3: return _apiISS;
+        case 4: return _apiUselessFacts;
+        default: return false;
+    }
+}
+
 void FunApp::cycleDisplayMode() {
-    displayMode = (displayMode + 1) % 5;
+    // Advance to next mode, then skip any disabled until we find an enabled one (or wrap)
+    for (int i = 0; i < 5; i++) {
+        displayMode = (displayMode + 1) % 5;
+        if (isModeEnabled(displayMode)) return;
+    }
+    // If all disabled, leave at 0 (room data as fallback)
+    displayMode = 0;
 }

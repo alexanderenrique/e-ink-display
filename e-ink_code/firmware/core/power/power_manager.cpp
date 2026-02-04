@@ -5,83 +5,33 @@ PowerManager::PowerManager() {
 }
 
 int PowerManager::getBatteryPercentage() {
-    Serial.println("\n=== getBatteryPercentage() Debug ===");
-
     // Set pin as input and configure attenuation
     pinMode(V_ADC, INPUT);
-    // Use ADC_ATTENDB_MAX for maximum range (~2.5V)
     analogSetPinAttenuation(V_ADC, ADC_ATTENDB_MAX);
-    
-    // initialize the switch pin as output
     pinMode(V_SWITCH, OUTPUT);
-
-    Serial.println("Pin configuration:");
-    Serial.println("  V_ADC pin: " + String(V_ADC));
-    Serial.println("  V_SWITCH pin: " + String(V_SWITCH));
-    Serial.println("  R1: " + String(BATTERY_R1) + " ohms");
-    Serial.println("  R2: " + String(BATTERY_R2) + " ohms");
-    Serial.println("  HIGH_VOLTAGE: " + String(BATTERY_HIGH_VOLTAGE) + "V");
-    Serial.println("  LOW_VOLTAGE: " + String(BATTERY_LOW_VOLTAGE) + "V");
-
-    // turn on the switch
-    Serial.println("Turning on voltage switch...");
     digitalWrite(V_SWITCH, LOW);
-
-    // wait for it to stabilize
     delay(100);
 
-    // Read and accumulate millivolt values
     float voltageMilliVoltsSum = 0;
-    Serial.println("Reading voltage values:");
     for (int i = 0; i < 10; i++) {
-        int milliVolts = analogReadMilliVolts(V_ADC);
-        voltageMilliVoltsSum += milliVolts;
-        Serial.println("  Reading " + String(i+1) + "/10: " + String(milliVolts) + " mV");
-        delay(10); // Small delay between readings
+        voltageMilliVoltsSum += analogReadMilliVolts(V_ADC);
+        delay(10);
     }
     float voltageMilliVolts = voltageMilliVoltsSum / 10.0;
-    float voltageAtADC = voltageMilliVolts / 1000.0;  // Convert mV to V
-    
-    Serial.println("Voltage Statistics:");
-    Serial.println("  Average voltage at ADC pin: " + String(voltageMilliVolts, 2) + " mV (" + String(voltageAtADC, 3) + " V)");
-    
-    // Check for saturation (ESP32-C3 ADC max is ~2.5-2.6V)
-    if (voltageAtADC > 2.6) {
-        Serial.println("  WARNING: Voltage exceeds ADC limit! ADC may be saturated.");
-    }
+    float voltageAtADC = voltageMilliVolts / 1000.0;
 
-    // turn off the switch by setting the pin to INPUT (let it float, external pull-up will pull high)
-    Serial.println("Floating voltage switch (set to INPUT, pull-up keeps high)...");
     pinMode(V_SWITCH, INPUT);
     delay(100);
 
-    // Calculate battery voltage from voltage divider
     float scalingFactor = (float)BATTERY_R2 / (BATTERY_R1 + BATTERY_R2);
     float batteryVoltage = voltageAtADC / scalingFactor;
-    
-    Serial.println("\nVoltage Calculation:");
-    Serial.println("  Voltage at ADC pin: " + String(voltageAtADC, 3) + "V");
-    Serial.println("  Scaling factor (R2/(R1+R2)): " + String(scalingFactor, 4));
-    Serial.println("  Calculated battery voltage: " + String(batteryVoltage, 3) + "V");
-    
-    // Warn if calculated battery voltage seems unreasonable
-    if (batteryVoltage > 4.5) {
-        Serial.println("  WARNING: Calculated battery voltage > 4.5V - ADC may be saturated!");
-    }
-    
-    // Calculate percentage based on battery voltage range
+
     float voltageRange = BATTERY_HIGH_VOLTAGE - BATTERY_LOW_VOLTAGE;
     float voltagePercentage = ((batteryVoltage - BATTERY_LOW_VOLTAGE) / voltageRange) * 100.0;
     
     // Clamp percentage between 0% and 100%
     if (voltagePercentage < 0.0) voltagePercentage = 0.0;
     if (voltagePercentage > 100.0) voltagePercentage = 100.0;
-    
-    Serial.println("\nResults:");
-    Serial.println("  Battery voltage: " + String(batteryVoltage, 3) + "V");
-    Serial.println("  Calculated percentage: " + String(voltagePercentage, 2) + "%");
-    Serial.println("  Rounded percentage: " + String((int)(voltagePercentage + 0.5f)) + "%");
-    Serial.println("=== End getBatteryPercentage() Debug ===\n");
 
     return (int)(voltagePercentage + 0.5f);
 }

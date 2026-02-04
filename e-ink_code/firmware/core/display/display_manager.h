@@ -20,6 +20,7 @@ public:
     void displayDefault(String text, int batteryPercent = -1);
     void displayEarthquakeFact(String earthquakeData, int batteryPercent = -1);
     void displayISSData(String issData, int batteryPercent = -1);
+    void displayBluetoothConfigMode();
     
     // Helper functions
     int renderTextWithWrap(String text, int startX, int startY, int maxWidth, int lineHeight, uint16_t textColor);

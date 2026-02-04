@@ -21,14 +21,23 @@ public:
 
 private:
     // Display mode tracking (persists across deep sleep)
+    // 0=room_data, 1=earthquake, 2=cat_facts, 3=iss, 4=useless_facts
     static RTC_DATA_ATTR int displayMode;
     
     // Refresh interval in minutes (default: 30 minutes)
     uint32_t _refreshIntervalMinutes = 30;
     
+    // API enable flags from config (which data sources to show)
+    bool _apiRoomData = true;
+    bool _apiCatFacts = true;
+    bool _apiEarthquake = true;
+    bool _apiISS = true;
+    bool _apiUselessFacts = true;
+    
     // Helper methods
     void handleOTA();
     void cycleDisplayMode();
+    bool isModeEnabled(int mode) const;
 };
 
 #endif // FUN_APP_H

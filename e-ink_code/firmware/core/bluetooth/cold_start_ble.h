@@ -8,11 +8,12 @@
  * Enables Bluetooth for a short window only on cold start (power-on reset).
  * Does nothing when waking from deep sleep (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED).
  *
- * BLE stays on for up to COLD_START_BLE_WINDOW_SECONDS, or until a central connects, then is disabled.
+ * BLE stays on for up to COLD_START_BLE_WINDOW_SECONDS (3 min), or until config is received (then device restarts).
+ * When a central connects, BLE remains active so it can discover services and send config.
  */
 class ColdStartBle {
 public:
-    static const uint32_t COLD_START_BLE_WINDOW_SECONDS = 60;
+    static const uint32_t COLD_START_BLE_WINDOW_SECONDS = 180;  // 3 minutes
 
     ColdStartBle();
 
@@ -23,7 +24,7 @@ public:
     void begin(esp_sleep_wakeup_cause_t wakeup_cause);
 
     /**
-     * Call from loop(). When active, checks whether 60s elapsed or a device connected;
+     * Call from loop(). When active, checks whether the window elapsed or a device connected;
      * when so, deinits BLE and clears active state.
      */
     void loop();

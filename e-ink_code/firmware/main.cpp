@@ -83,6 +83,12 @@ void setup() {
     // On cold start only (not wake from deep sleep), enable BLE for 60s or until connected
     coldStartBle.begin(wakeup_reason);
 
+    // When in BLE config mode, show config screen on display
+    if (coldStartBle.isActive()) {
+        displayManager.begin();
+        displayManager.displayBluetoothConfigMode();
+    }
+
     // Initialize app manager with core managers
     appManager.setWiFiManager(&wifiManager);
     appManager.setDisplayManager(&displayManager);
@@ -165,11 +171,14 @@ void setup() {
 }
 
 void loop() {
-    // Cold-start BLE: disable after 60s or first connection
+    // Cold-start BLE: disable after 2 minutes or first connection
     coldStartBle.loop();
 
-    // Let the app manager handle the active app's loop
-    appManager.loop();
+    // While BLE config mode is active, keep showing the config screen (don't run app loop).
+    // After BLE times out or config is received, run the app and it will update the display.
+    if (!coldStartBle.isActive()) {
+        appManager.loop();
+    }
 
     // Note: Individual apps handle their own sleep/wake cycles
     // The app manager just coordinates which app is running

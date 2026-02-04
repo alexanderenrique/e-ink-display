@@ -5,6 +5,9 @@ CONFIG_BT_ENABLED=y
 # Use nimBLE stack (lightweight BLE-only stack)
 CONFIG_BT_NIMBLE_ENABLED=y
 
+# Larger stack for NimBLE host task (avoids Instruction access fault / crash on client connect)
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=8192
+
 # Disable Bluedroid (classic Bluetooth stack)
 CONFIG_BT_BLUEDROID_ENABLED=n
 
