@@ -130,13 +130,43 @@ void setup() {
             DynamicJsonDocument appDoc(2048);
             appDoc["app"] = storedDoc["mode"];
             
-            // Copy config fields (refreshInterval, apis, etc.) to config object
+            // Copy config fields (refreshInterval, apis, sensor app fields, etc.) to config object
             JsonObject config = appDoc.createNestedObject("config");
             if (storedDoc.containsKey("refreshInterval")) {
                 config["refreshInterval"] = storedDoc["refreshInterval"];
             }
             if (storedDoc.containsKey("apis")) {
                 config["apis"] = storedDoc["apis"];
+            }
+            // Sensor app: temperature units (C/F), nemo token/url/sensor ID, location
+            if (storedDoc.containsKey("units")) {
+                config["units"] = storedDoc["units"];
+            } else if (storedDoc.containsKey("temperatureUnit")) {
+                config["units"] = storedDoc["temperatureUnit"];
+            }
+            if (storedDoc.containsKey("nemoToken")) {
+                config["nemoToken"] = storedDoc["nemoToken"];
+            } else if (storedDoc.containsKey("nemo_token")) {
+                config["nemoToken"] = storedDoc["nemo_token"];
+            }
+            if (storedDoc.containsKey("nemoUrl")) {
+                config["nemoUrl"] = storedDoc["nemoUrl"];
+            } else if (storedDoc.containsKey("nemo_url")) {
+                config["nemoUrl"] = storedDoc["nemo_url"];
+            } else if (storedDoc.containsKey("nemoApiEndpoint")) {
+                config["nemoUrl"] = storedDoc["nemoApiEndpoint"];
+            }
+            if (storedDoc.containsKey("sensorId")) {
+                config["sensorId"] = storedDoc["sensorId"];
+            } else if (storedDoc.containsKey("sensor_id")) {
+                config["sensorId"] = storedDoc["sensor_id"];
+            } else if (storedDoc.containsKey("nemoSensorId")) {
+                config["sensorId"] = storedDoc["nemoSensorId"];
+            }
+            if (storedDoc.containsKey("sensorLocation")) {
+                config["sensorLocation"] = storedDoc["sensorLocation"];
+            } else if (storedDoc.containsKey("sensor_location")) {
+                config["sensorLocation"] = storedDoc["sensor_location"];
             }
             
             String appConfigJson;
