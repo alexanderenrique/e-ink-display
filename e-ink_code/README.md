@@ -23,15 +23,24 @@ The device cycles through multiple display modules, each showing different infor
 
 ### Device Configuration
 
-Each device can fetch its configuration from a remote server:
-- Device-specific configs: `https://ota.denton.works/config/devices/{name}.json`
-- Fallback to: `https://ota.denton.works/config/devices/default.json`
+Devices can be configured in two ways:
+
+1. **Bluetooth Low Energy (BLE)**: On cold start, the device enters BLE mode for 60 seconds, allowing wireless configuration via mobile app or web client. See [Bluetooth Configuration](#bluetooth-configuration-cold-start-ble) section for details.
+
+2. **Remote Server**: Each device can fetch its configuration from a remote server:
+   - Device-specific configs: `https://ota.denton.works/config/devices/{name}.json`
+   - Fallback to: `https://ota.denton.works/config/devices/default.json`
 
 Configuration options include:
+- WiFi credentials (SSID and password)
+- App mode selection (fun, sensor, shelf)
 - Display refresh interval
+- API keys and endpoints
 - Module enable/disable toggles
 - Custom message endpoints
 - Per-device keys/secrets
+
+Configuration is stored in ESP32 Preferences (NVS) and persists across deep sleep cycles and reboots.
 
 ## Over-The-Air (OTA) Updates
 
@@ -200,6 +209,188 @@ Enable verbose OTA logging by setting `OTA_DEBUG 1` in `ota_manager.h`. This pro
 - Download progress (percentage and bytes)
 - Firmware write operations
 - Partition operations
+
+## Bluetooth Configuration (Cold-Start BLE)
+
+The device includes a Bluetooth Low Energy (BLE) configuration system that enables wireless setup without physical access. BLE is only active during cold starts (power-on reset), not when waking from deep sleep, to minimize power consumption.
+
+### How Bluetooth Works
+
+#### Cold-Start Detection
+
+The `ColdStartBle` class automatically detects cold starts by checking the ESP32 wakeup cause:
+- **Cold start**: `ESP_SLEEP_WAKEUP_UNDEFINED` - BLE is enabled
+- **Deep sleep wake**: Any other wakeup cause - BLE is skipped
+
+This ensures BLE only activates when the device is first powered on or manually reset, not during normal operation cycles.
+
+#### BLE Window
+
+When active, BLE remains enabled for up to **60 seconds** (`COLD_START_BLE_WINDOW_SECONDS`) or until a central device connects, whichever comes first. After this window expires or a connection is established, BLE is automatically disabled to conserve power.
+
+#### WiFi/Bluetooth Coexistence
+
+On ESP32-C3, WiFi and Bluetooth cannot operate simultaneously. When BLE is activated:
+1. WiFi is explicitly disabled (`WiFi.mode(WIFI_OFF)`)
+2. BLE advertising begins
+3. After BLE window expires, WiFi can be re-enabled for normal operation
+
+### skipBLE Flag Implementation
+
+The `skipBLE` flag prevents BLE from activating on the boot immediately following a configuration update, allowing the device to immediately apply new settings without entering BLE mode again.
+
+#### How It Works
+
+1. **Flag Setting**: When configuration is received via BLE:
+   ```cpp
+   preferences.putBool("skipBLE", true);
+   ```
+   The flag is stored in ESP32 Preferences (NVS) before the device restarts.
+
+2. **Flag Checking**: On the next boot, `ColdStartBle::begin()` checks the flag:
+   ```cpp
+   if (shouldSkipBle()) {
+       // Skip BLE initialization
+       return;
+   }
+   ```
+
+3. **Flag Clearing**: The `shouldSkipBle()` method:
+   - Reads the flag from Preferences
+   - Clears it immediately after reading (one-time use)
+   - Returns `true` if the flag was set, `false` otherwise
+
+This ensures that:
+- After receiving config via BLE, the device restarts and immediately applies the config (no BLE window)
+- On subsequent cold starts, BLE will activate normally (flag was cleared)
+- The flag is automatically managed and doesn't require manual intervention
+
+### BLE Service Architecture
+
+#### Device Information Service (0x180A)
+
+Standard BLE service for device discovery:
+- **Model Number Characteristic (0x2A24)**: Contains "E-Ink Display"
+- Helps with service discovery and device identification
+
+#### Custom Configuration Service
+
+**Service UUID**: `0000ff00-0000-1000-8000-00805f9b34fb`
+
+**TX Characteristic** (`0000ff01-0000-1000-8000-00805f9b34fb`):
+- Properties: `WRITE | WRITE_NR`
+- Receives JSON configuration from client
+- Triggers configuration parsing and storage
+
+**RX Characteristic** (`0000ff02-0000-1000-8000-00805f9b34fb`):
+- Properties: `READ | NOTIFY`
+- Can send data back to client (future use)
+
+### Configuration Format
+
+Configuration is sent as JSON via the TX characteristic. Example:
+
+```json
+{
+  "mode": "fun",
+  "wifiSSID": "YourNetwork",
+  "wifiPassword": "YourPassword",
+  "refreshInterval": 60,
+  "timestamp": 1234567890,
+  "apis": {
+    "earthquake": {
+      "enabled": true,
+      "key": "your-api-key"
+    }
+  }
+}
+```
+
+#### Configuration Fields
+
+- `mode`: App mode to activate ("fun", "sensor", "shelf")
+- `wifiSSID`: WiFi network name (stored in Preferences)
+- `wifiPassword`: WiFi password (stored in Preferences)
+- `refreshInterval`: Display refresh interval in minutes
+- `timestamp`: Configuration timestamp
+- `apis`: Nested object containing API-specific configuration
+
+### Configuration Storage
+
+All configuration is stored in ESP32 Preferences (NVS) under the "config" namespace:
+
+- `wifiSSID`: WiFi network name
+- `wifiPassword`: WiFi password
+- `mode`: Active app mode
+- `refreshInterval`: Refresh interval in minutes
+- `timestamp`: Configuration timestamp
+- `apis`: APIs configuration as JSON string
+- `configJson`: Full configuration JSON string
+- `skipBLE`: Boolean flag (automatically cleared after use)
+
+### Usage Flow
+
+1. **Cold Start**: Device powers on or is reset
+   - `ColdStartBle::begin()` is called with wakeup cause
+   - If cold start detected and `skipBLE` is false, BLE activates
+   - Device advertises as "E-Ink Display" for 60 seconds
+
+2. **Client Connection**: Mobile app or web client connects
+   - Scans for "E-Ink Display" device
+   - Connects to BLE service
+   - Writes JSON configuration to TX characteristic
+
+3. **Configuration Processing**:
+   - Device receives JSON via TX characteristic callback
+   - Parses and validates JSON
+   - Stores configuration in Preferences
+   - Sets `skipBLE` flag to `true`
+   - Restarts device
+
+4. **Configuration Application**:
+   - Device reboots
+   - `shouldSkipBle()` returns `true` (flag is set)
+   - BLE is skipped
+   - Stored configuration is loaded from Preferences
+   - App manager applies configuration
+   - Normal operation begins
+
+5. **Subsequent Boots**:
+   - `skipBLE` flag was cleared, so BLE activates normally on cold starts
+   - Configuration persists across deep sleep cycles
+
+### API Reference
+
+#### ColdStartBle Class
+
+```cpp
+// Initialize BLE (call from setup())
+void begin(esp_sleep_wakeup_cause_t wakeup_cause);
+
+// Update BLE state (call from loop())
+void loop();
+
+// Check if BLE is currently active
+bool isActive() const;
+
+// Static methods for accessing stored configuration
+static String getStoredWiFiSSID();
+static String getStoredWiFiPassword();
+static String getStoredConfigJson();
+static bool hasStoredConfig();
+static bool shouldSkipBle();  // Checks and clears skipBLE flag
+```
+
+### Debugging
+
+Serial output provides detailed BLE operation information:
+- BLE initialization status
+- Connection events
+- Configuration reception and parsing
+- Storage operations
+- `skipBLE` flag status
+
+Monitor serial output at 115200 baud to see BLE activity.
 
 ## Hardware
 

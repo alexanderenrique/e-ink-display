@@ -30,9 +30,9 @@
 // ============================================================================
 // Network Configuration
 // ============================================================================
-// WiFi credentials
-#define WIFI_SSID            "Zucotti Manicotti"
-#define WIFI_PASSWORD        "100BoiledEggs"
+// WiFi credentials are now configured via BLE and stored in Preferences
+// Use ColdStartBle::getStoredWiFiSSID() and ColdStartBle::getStoredWiFiPassword()
+// to retrieve them at runtime.
 
 // OTA Update Server Configuration
 #define OTA_VERSION_CHECK_URL "https://your-server.com/api/version"

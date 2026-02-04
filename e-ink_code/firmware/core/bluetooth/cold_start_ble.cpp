@@ -1,6 +1,8 @@
 #include "cold_start_ble.h"
 #include "NimBLEDevice.h"
 #include <WiFi.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
 
 // Compile-time check for BLE support
 #ifndef CONFIG_BT_ENABLED
@@ -122,6 +124,115 @@ public:
         // Check if it looks like JSON
         if (jsonString.startsWith("{") && jsonString.endsWith("}")) {
             Serial.println("[ColdStartBle] ✓ Detected JSON format");
+            
+            // Parse JSON configuration
+            Serial.println("[ColdStartBle] Parsing JSON configuration...");
+            DynamicJsonDocument doc(2048);
+            DeserializationError error = deserializeJson(doc, jsonString);
+            
+            if (error) {
+                Serial.print("[ColdStartBle] JSON parse error: ");
+                Serial.println(error.c_str());
+                Serial.println("[ColdStartBle] ========================================");
+                Serial.println("[ColdStartBle] END OF DATA RECEIVED (PARSE FAILED)");
+                Serial.println("[ColdStartBle] ========================================");
+                return;
+            }
+            
+            Serial.println("[ColdStartBle] ✓ JSON parsed successfully");
+            
+            // Store configuration in Preferences
+            Preferences preferences;
+            preferences.begin("config", false); // false = read/write mode
+            
+            // Store WiFi credentials if provided
+            // Check for both "wifiSSID" and "wifiSsid" variants (JSON key case sensitivity)
+            const char* wifiSSID = nullptr;
+            if (doc.containsKey("wifiSSID")) {
+                wifiSSID = doc["wifiSSID"];
+            } else if (doc.containsKey("wifiSsid")) {
+                wifiSSID = doc["wifiSsid"];
+            }
+            
+            if (wifiSSID != nullptr) {
+                preferences.putString("wifiSSID", wifiSSID);
+                Serial.print("[ColdStartBle] Stored WiFi SSID: ");
+                Serial.println(wifiSSID);
+            } else {
+                Serial.println("[ColdStartBle] ⚠ No wifiSSID or wifiSsid in config");
+            }
+            
+            if (doc.containsKey("wifiPassword")) {
+                const char* wifiPassword = doc["wifiPassword"];
+                preferences.putString("wifiPassword", wifiPassword);
+                Serial.print("[ColdStartBle] Stored WiFi Password: ");
+                Serial.println("*** (hidden)");
+            } else {
+                Serial.println("[ColdStartBle] ⚠ No wifiPassword in config");
+            }
+            
+            // Store app mode
+            if (doc.containsKey("mode")) {
+                const char* mode = doc["mode"];
+                preferences.putString("mode", mode);
+                Serial.print("[ColdStartBle] Stored mode: ");
+                Serial.println(mode);
+            }
+            
+            // Store refresh interval (in minutes)
+            if (doc.containsKey("refreshInterval")) {
+                uint32_t refreshInterval = doc["refreshInterval"];
+                preferences.putUInt("refreshInterval", refreshInterval);
+                Serial.print("[ColdStartBle] Stored refreshInterval: ");
+                Serial.print(refreshInterval);
+                Serial.println(" minutes");
+            }
+            
+            // Store timestamp
+            if (doc.containsKey("timestamp")) {
+                uint64_t timestamp = doc["timestamp"];
+                preferences.putULong64("timestamp", timestamp);
+                Serial.print("[ColdStartBle] Stored timestamp: ");
+                Serial.println(timestamp);
+            }
+            
+            // Store APIs config as JSON string (nested object)
+            if (doc.containsKey("apis") && doc["apis"].is<JsonObject>()) {
+                String apisJson;
+                serializeJson(doc["apis"], apisJson);
+                preferences.putString("apis", apisJson);
+                Serial.print("[ColdStartBle] Stored APIs config: ");
+                Serial.println(apisJson);
+            }
+            
+            // Store full config JSON for app manager
+            preferences.putString("configJson", jsonString);
+            Serial.println("[ColdStartBle] Stored full config JSON");
+            
+            // Set flag to skip BLE on next boot (after restart)
+            // Note: ESP32 Preferences key max length is 15 characters
+            bool flagSet = preferences.putBool("skipBLE", true);
+            Serial.print("[ColdStartBle] Set skipBLE flag: ");
+            Serial.println(flagSet ? "SUCCESS" : "FAILED");
+            
+            // Verify the flag was set
+            bool flagVerify = preferences.getBool("skipBLE", false);
+            Serial.print("[ColdStartBle] Verified skipBLE flag: ");
+            Serial.println(flagVerify ? "TRUE" : "FALSE");
+            
+            preferences.end();
+            Serial.println("[ColdStartBle] ✓ Configuration saved to Preferences");
+            
+            // Flush serial and give Preferences time to commit
+            Serial.flush();
+            delay(1000);  // Give Preferences time to commit to NVS
+            
+            // Restart to apply the new configuration
+            Serial.println("[ColdStartBle] Restarting device to apply configuration...");
+            Serial.flush();
+            delay(500);
+            ESP.restart();
+            
         } else {
             Serial.println("[ColdStartBle] ⚠ Does not appear to be JSON");
         }
@@ -159,6 +270,12 @@ void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause) {
     if (wakeup_cause != ESP_SLEEP_WAKEUP_UNDEFINED) {
         Serial.print("[ColdStartBle] Skipping BLE mode - wakeup cause: ");
         Serial.println(wakeup_cause);
+        return;
+    }
+
+    // Check if we should skip BLE (e.g., after config-triggered restart)
+    if (shouldSkipBle()) {
+        Serial.println("[ColdStartBle] ✓ Skipping BLE mode - config was just received, applying changes");
         return;
     }
 
@@ -361,4 +478,56 @@ void ColdStartBle::loop() {
             Serial.println("[ColdStartBle] BLE disabled after 60s window");
         }
     }
+}
+
+String ColdStartBle::getStoredWiFiSSID() {
+    Preferences preferences;
+    preferences.begin("config", true); // true = read-only mode
+    String ssid = preferences.getString("wifiSSID", "");
+    preferences.end();
+    return ssid;
+}
+
+String ColdStartBle::getStoredWiFiPassword() {
+    Preferences preferences;
+    preferences.begin("config", true); // true = read-only mode
+    String password = preferences.getString("wifiPassword", "");
+    preferences.end();
+    return password;
+}
+
+String ColdStartBle::getStoredConfigJson() {
+    Preferences preferences;
+    preferences.begin("config", true); // true = read-only mode
+    String configJson = preferences.getString("configJson", "");
+    preferences.end();
+    return configJson;
+}
+
+bool ColdStartBle::hasStoredConfig() {
+    Preferences preferences;
+    preferences.begin("config", true); // true = read-only mode
+    bool hasConfig = preferences.isKey("configJson");
+    preferences.end();
+    return hasConfig;
+}
+
+bool ColdStartBle::shouldSkipBle() {
+    Preferences preferences;
+    if (!preferences.begin("config", false)) { // false = read/write mode
+        Serial.println("[ColdStartBle] ERROR: Failed to open Preferences for skipBle check");
+        return false;
+    }
+    
+    bool skipBle = preferences.getBool("skipBLE", false);
+    Serial.print("[ColdStartBle] Checking skipBLE flag: ");
+    Serial.println(skipBle ? "TRUE (will skip BLE)" : "FALSE (will enable BLE)");
+    
+    if (skipBle) {
+        // Clear the flag after checking
+        preferences.remove("skipBLE");
+        Serial.println("[ColdStartBle] ✓ Found skipBLE flag, cleared it");
+    }
+    preferences.end();
+    return skipBle;
 }

@@ -6,6 +6,8 @@
 #include "../../core/display/display_manager.h"
 #include "../../core/power/power_manager.h"
 #include "../../core/ota/ota_manager.h"
+#include "../../core/bluetooth/cold_start_ble.h"
+#include <ArduinoJson.h>
 #include <Wire.h>
 
 // Static display mode (persists across deep sleep)
@@ -20,6 +22,29 @@ bool FunApp::begin() {
     // Initialize display
     if (_display) {
         _display->begin();
+    }
+    
+    return true;
+}
+
+bool FunApp::configure(const JsonObject& config) {
+    Serial.println("[FunApp] Configuring Fun App");
+    
+    // Get refresh interval from config (in minutes)
+    if (config.containsKey("refreshInterval")) {
+        _refreshIntervalMinutes = config["refreshInterval"];
+        Serial.print("[FunApp] Refresh interval set to: ");
+        Serial.print(_refreshIntervalMinutes);
+        Serial.println(" minutes");
+    } else {
+        Serial.print("[FunApp] No refreshInterval in config, using default: ");
+        Serial.print(_refreshIntervalMinutes);
+        Serial.println(" minutes");
+    }
+    
+    // TODO: Handle APIs config if needed
+    if (config.containsKey("apis")) {
+        Serial.println("[FunApp] APIs config received (not yet implemented)");
     }
     
     return true;
@@ -49,8 +74,18 @@ void FunApp::loop() {
         }
     } else {
         // For API calls, initialize WiFi once at the start
+        // Get WiFi credentials from stored config (set via BLE)
         if (_wifi) {
-            _wifi->begin(WIFI_SSID, WIFI_PASSWORD);
+            String wifiSSID = ColdStartBle::getStoredWiFiSSID();
+            String wifiPassword = ColdStartBle::getStoredWiFiPassword();
+            
+            if (wifiSSID.length() > 0) {
+                Serial.print("[FunApp] Connecting to WiFi: ");
+                Serial.println(wifiSSID);
+                _wifi->begin(wifiSSID.c_str(), wifiPassword.c_str());
+            } else {
+                Serial.println("[FunApp] WARNING: No WiFi credentials stored. WiFi features disabled.");
+            }
         }
         
         if (_wifi && _wifi->isConnected()) {
@@ -132,7 +167,14 @@ void FunApp::loop() {
     }
     
     // Wait before next cycle (or sleep)
-    delay(150000); // 5 minutes
+    // Convert refreshInterval from minutes to milliseconds
+    uint32_t delayMs = _refreshIntervalMinutes * 60UL * 1000UL;
+    Serial.print("[FunApp] Waiting ");
+    Serial.print(_refreshIntervalMinutes);
+    Serial.print(" minutes (");
+    Serial.print(delayMs);
+    Serial.println(" ms) before next cycle");
+    delay(delayMs);
     
     // Optionally enter deep sleep
     // if (_power) {

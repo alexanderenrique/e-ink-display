@@ -5,6 +5,7 @@
 #include "core/ota/ota_manager.h"
 #include "core/bluetooth/cold_start_ble.h"
 #include "app_manager/app_manager.h"
+#include <ArduinoJson.h>
 // Include only selected apps (or all if no APP_* flags, for default env)
 #if defined(APP_FUN)
 #include "apps/fun/app.h"
@@ -104,12 +105,59 @@ void setup() {
     appManager.registerApp(&shelfApp, "shelf");
 #endif
 
-    // Configure from JSON (for testing)
-    if (appManager.configureFromJson(TEST_CONFIG_JSON)) {
-        Serial.println("[Main] Configuration loaded successfully");
+    // Try to load configuration from Preferences (stored via BLE)
+    String storedConfigJson = ColdStartBle::getStoredConfigJson();
+    if (storedConfigJson.length() > 0) {
+        Serial.println("[Main] Found stored configuration from BLE");
+        Serial.print("[Main] Config JSON: ");
+        Serial.println(storedConfigJson);
+        
+        // Parse and apply the stored config
+        // The stored config format is: {"mode":"fun","timestamp":...,"refreshInterval":60,"apis":{...},"wifiSSID":"...","wifiPassword":"..."}
+        // We need to convert it to app manager format: {"app":"fun","config":{...}}
+        // For now, let's use ArduinoJson to transform it
+        DynamicJsonDocument storedDoc(2048);
+        DeserializationError error = deserializeJson(storedDoc, storedConfigJson);
+        
+        if (!error && storedDoc.containsKey("mode")) {
+            // Create app manager format
+            DynamicJsonDocument appDoc(2048);
+            appDoc["app"] = storedDoc["mode"];
+            
+            // Copy config fields (refreshInterval, apis, etc.) to config object
+            JsonObject config = appDoc.createNestedObject("config");
+            if (storedDoc.containsKey("refreshInterval")) {
+                config["refreshInterval"] = storedDoc["refreshInterval"];
+            }
+            if (storedDoc.containsKey("apis")) {
+                config["apis"] = storedDoc["apis"];
+            }
+            
+            String appConfigJson;
+            serializeJson(appDoc, appConfigJson);
+            
+            Serial.print("[Main] Transformed config: ");
+            Serial.println(appConfigJson);
+            
+            if (appManager.configureFromJson(appConfigJson.c_str())) {
+                Serial.println("[Main] Stored configuration loaded successfully");
+            } else {
+                Serial.println("[Main] Failed to apply stored config, using default");
+                appManager.setActiveApp(DEFAULT_APP_NAME);
+            }
+        } else {
+            Serial.println("[Main] Failed to parse stored config, using default");
+            appManager.setActiveApp(DEFAULT_APP_NAME);
+        }
     } else {
-        Serial.println("[Main] Configuration failed, using default");
-        appManager.setActiveApp(DEFAULT_APP_NAME);
+        Serial.println("[Main] No stored configuration found, using test config");
+        // Configure from JSON (for testing)
+        if (appManager.configureFromJson(TEST_CONFIG_JSON)) {
+            Serial.println("[Main] Test configuration loaded successfully");
+        } else {
+            Serial.println("[Main] Configuration failed, using default");
+            appManager.setActiveApp(DEFAULT_APP_NAME);
+        }
     }
     
     // Begin the active app

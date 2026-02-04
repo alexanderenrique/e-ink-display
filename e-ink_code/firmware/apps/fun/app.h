@@ -15,10 +15,16 @@ public:
     
     // App identification
     const char* getName() override { return "fun"; }
+    
+    // Configuration
+    bool configure(const JsonObject& config) override;
 
 private:
     // Display mode tracking (persists across deep sleep)
     static RTC_DATA_ATTR int displayMode;
+    
+    // Refresh interval in minutes (default: 30 minutes)
+    uint32_t _refreshIntervalMinutes = 30;
     
     // Helper methods
     void handleOTA();

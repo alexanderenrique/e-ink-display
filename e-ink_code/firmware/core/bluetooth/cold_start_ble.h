@@ -31,6 +31,35 @@ public:
     /** True when BLE window is active (cold start and not yet timed out / connected). */
     bool isActive() const { return _active; }
 
+    /**
+     * Get stored WiFi SSID from Preferences.
+     * Returns empty string if not set.
+     */
+    static String getStoredWiFiSSID();
+
+    /**
+     * Get stored WiFi password from Preferences.
+     * Returns empty string if not set.
+     */
+    static String getStoredWiFiPassword();
+
+    /**
+     * Get stored configuration JSON string from Preferences.
+     * Returns empty string if not set.
+     */
+    static String getStoredConfigJson();
+
+    /**
+     * Check if configuration is stored in Preferences.
+     */
+    static bool hasStoredConfig();
+
+    /**
+     * Check if BLE should be skipped on this boot (e.g., after config-triggered restart).
+     * Clears the flag after checking.
+     */
+    static bool shouldSkipBle();
+
 private:
     bool _active;
     uint32_t _startMillis;
