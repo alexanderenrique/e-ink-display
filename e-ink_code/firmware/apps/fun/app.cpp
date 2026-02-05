@@ -67,13 +67,33 @@ void FunApp::loop() {
         displayMode = (displayMode + 1) % 5;
     }
     
-    // Mode 0: Room temperature and humidity (no WiFi needed)
+    // Mode 0: Room temperature and humidity (WiFi optional for strength display)
     // Mode 1: Earthquake, 2: Meow fact, 3: ISS, 4: Useless fact (WiFi needed)
     if (displayMode == 0) {
-        // Display temperature and humidity from SHT31 sensor (no WiFi needed)
+        // Try to connect WiFi to show WiFi strength if available
+        if (_wifi) {
+            String wifiSSID = ColdStartBle::getStoredWiFiSSID();
+            String wifiPassword = ColdStartBle::getStoredWiFiPassword();
+            
+            if (wifiSSID.length() > 0) {
+                Serial.print("[FunApp] Connecting to WiFi for room data display: ");
+                Serial.println(wifiSSID);
+                _wifi->begin(wifiSSID.c_str(), wifiPassword.c_str());
+            } else {
+                Serial.println("[FunApp] No WiFi credentials stored. Room data will display without WiFi strength.");
+            }
+        }
+        
+        // Display temperature and humidity from SHT31 sensor
+        // WiFi strength will be included if WiFi is connected, otherwise omitted
         String roomData = getRoomData();
         if (_display) {
             renderDefault(_display, roomData, batteryPercent);
+        }
+        
+        // Disable WiFi after displaying to save power
+        if (_wifi) {
+            _wifi->disconnect();
         }
     } else {
         // For API calls, initialize WiFi once at the start

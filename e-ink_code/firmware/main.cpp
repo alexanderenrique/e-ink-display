@@ -156,12 +156,24 @@ void setup() {
             } else if (storedDoc.containsKey("nemoApiEndpoint")) {
                 config["nemoUrl"] = storedDoc["nemoApiEndpoint"];
             }
-            if (storedDoc.containsKey("sensorId")) {
-                config["sensorId"] = storedDoc["sensorId"];
-            } else if (storedDoc.containsKey("sensor_id")) {
-                config["sensorId"] = storedDoc["sensor_id"];
-            } else if (storedDoc.containsKey("nemoSensorId")) {
-                config["sensorId"] = storedDoc["nemoSensorId"];
+            // Handle temperature and humidity sensor IDs separately
+            if (storedDoc.containsKey("temperatureSensorId")) {
+                config["temperatureSensorId"] = storedDoc["temperatureSensorId"];
+            } else if (storedDoc.containsKey("temperature_sensor_id")) {
+                config["temperatureSensorId"] = storedDoc["temperature_sensor_id"];
+            }
+            if (storedDoc.containsKey("humiditySensorId")) {
+                config["humiditySensorId"] = storedDoc["humiditySensorId"];
+            } else if (storedDoc.containsKey("humidity_sensor_id")) {
+                config["humiditySensorId"] = storedDoc["humidity_sensor_id"];
+            }
+            // Legacy support for single sensorId (for backwards compatibility)
+            if (storedDoc.containsKey("sensorId") && !config.containsKey("temperatureSensorId")) {
+                config["temperatureSensorId"] = storedDoc["sensorId"];
+            } else if (storedDoc.containsKey("sensor_id") && !config.containsKey("temperatureSensorId")) {
+                config["temperatureSensorId"] = storedDoc["sensor_id"];
+            } else if (storedDoc.containsKey("nemoSensorId") && !config.containsKey("temperatureSensorId")) {
+                config["temperatureSensorId"] = storedDoc["nemoSensorId"];
             }
             if (storedDoc.containsKey("sensorLocation")) {
                 config["sensorLocation"] = storedDoc["sensorLocation"];

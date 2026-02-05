@@ -38,8 +38,22 @@ void ShelfApp::loop() {
         _display->disableSPI();
     }
     
-    // Wait before next cycle
-    delay(60000); // 1 minute
+    // Wait before next cycle (or sleep)
+    // For testing: use simple delay
+    // TODO: Add refreshIntervalMinutes config from BLE
+    uint32_t delayMs = 60000; // 1 minute default
+    Serial.print("[ShelfApp] Waiting ");
+    Serial.print(delayMs / 1000);
+    Serial.print(" seconds (");
+    Serial.print(delayMs);
+    Serial.println(" ms) before next cycle");
+    delay(delayMs);
+    
+    // Optionally enter deep sleep
+    // if (_power) {
+    //     // TODO: Use refreshIntervalMinutes from BLE config when available
+    //     _power->enterDeepSleep(60); // 1 minute (will use refreshIntervalMinutes * 60 when config is added)
+    // }
 }
 
 void ShelfApp::end() {

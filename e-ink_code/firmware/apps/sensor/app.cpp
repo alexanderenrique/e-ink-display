@@ -42,14 +42,24 @@ bool SensorApp::configure(const JsonObject& config) {
         Serial.println(_nemoUrl);
     }
 
-    if (config.containsKey("sensorId")) {
-        _sensorId = config["sensorId"].as<const char*>();
-    } else if (config.containsKey("sensor_id")) {
-        _sensorId = config["sensor_id"].as<const char*>();
+    if (config.containsKey("temperatureSensorId")) {
+        _temperatureSensorId = config["temperatureSensorId"].as<const char*>();
+    } else if (config.containsKey("temperature_sensor_id")) {
+        _temperatureSensorId = config["temperature_sensor_id"].as<const char*>();
     }
-    if (_sensorId.length() > 0) {
-        Serial.print("[SensorApp] Sensor ID: ");
-        Serial.println(_sensorId);
+    if (_temperatureSensorId.length() > 0) {
+        Serial.print("[SensorApp] Temperature Sensor ID: ");
+        Serial.println(_temperatureSensorId);
+    }
+
+    if (config.containsKey("humiditySensorId")) {
+        _humiditySensorId = config["humiditySensorId"].as<const char*>();
+    } else if (config.containsKey("humidity_sensor_id")) {
+        _humiditySensorId = config["humidity_sensor_id"].as<const char*>();
+    }
+    if (_humiditySensorId.length() > 0) {
+        Serial.print("[SensorApp] Humidity Sensor ID: ");
+        Serial.println(_humiditySensorId);
     }
 
     if (config.containsKey("sensorLocation")) {
@@ -85,17 +95,27 @@ void SensorApp::loop() {
         batteryPercent = _power->getBatteryPercentage();
     }
 
-    // Connect WiFi if we have Nemo config (use stored credentials from BLE)
-    if (_nemoToken.length() > 0 && _sensorId.length() > 0 && _wifi) {
+    // Try to connect WiFi to show WiFi strength if available
+    // Also connect if we have Nemo config for posting data
+    bool wifiConnected = false;
+    if (_wifi) {
         String wifiSSID = ColdStartBle::getStoredWiFiSSID();
         String wifiPassword = ColdStartBle::getStoredWiFiPassword();
         if (wifiSSID.length() > 0) {
-            _wifi->begin(wifiSSID.c_str(), wifiPassword.c_str());
+            Serial.println("[SensorApp] WiFi connection requested");
+            wifiConnected = _wifi->begin(wifiSSID.c_str(), wifiPassword.c_str());
+            if (wifiConnected) {
+                Serial.println("[SensorApp] WiFi connection successful - ready for Nemo API calls");
+            } else {
+                Serial.println("[SensorApp] WiFi connection failed - Nemo API calls will be skipped");
+            }
+        } else {
+            Serial.println("[SensorApp] No WiFi credentials stored. Sensor data will display without WiFi strength.");
         }
     }
 
     bool useCelsius = (_units == "C");
-    String sensorData = fetchSensorData(useCelsius);
+    String sensorData = fetchSensorData(useCelsius, wifiConnected);
 
     // When location is set, use it as the red header line; otherwise use default title
     if (_sensorLocation.length() > 0) {
@@ -112,16 +132,34 @@ void SensorApp::loop() {
     }
 
     // Optionally POST to Nemo (use raw Celsius readings)
-    if (_nemoToken.length() > 0 && _sensorId.length() > 0 && _nemoUrl.length() > 0) {
+    if (_nemoToken.length() > 0 && _nemoUrl.length() > 0) {
         float tempC, humidity;
         if (getSensorReadingsRaw(tempC, humidity)) {
-            postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(), _sensorId.c_str(),
+            postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(),
+                                 _temperatureSensorId.c_str(), _humiditySensorId.c_str(),
                                  tempC, humidity);
         }
     }
 
+    // Disable WiFi after displaying and posting to save power
+    if (_wifi) {
+        _wifi->disconnect();
+    }
+
+    // Wait before next cycle (or sleep)
+    // Convert refreshInterval from minutes to milliseconds
     uint32_t delayMs = _refreshIntervalMinutes * 60UL * 1000UL;
+    Serial.print("[SensorApp] Waiting ");
+    Serial.print(_refreshIntervalMinutes);
+    Serial.print(" minutes (");
+    Serial.print(delayMs);
+    Serial.println(" ms) before next cycle");
     delay(delayMs);
+    
+    // Optionally enter deep sleep
+    // if (_power) {
+    //     _power->enterDeepSleep(_refreshIntervalMinutes * 60); // Use refreshIntervalMinutes in seconds
+    // }
 }
 
 void SensorApp::end() {

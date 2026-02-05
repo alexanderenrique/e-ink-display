@@ -2,11 +2,12 @@
 
 # Clean build files
 
-
+## FUN APP
 pio run --target clean
 pio run -e seeed_xiao_fun -t upload
 pio device monitor
 
+## SENSOR APP
 pio run --target clean
 pio run -e seeed_xiao_shelf_sensor -t upload
 pio device monitor

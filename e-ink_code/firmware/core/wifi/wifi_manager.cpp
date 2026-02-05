@@ -11,7 +11,7 @@ bool WiFiManager::begin(const char* ssid, const char* password) {
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); // Disable WiFi sleep for better performance during active use
     
-    Serial.print("Connecting to WiFi: ");
+    Serial.print("[WiFi] Attempting to connect to WiFi: ");
     Serial.println(_ssid);
     
     WiFi.begin(_ssid, _password);
@@ -22,17 +22,43 @@ bool WiFiManager::begin(const char* ssid, const char* password) {
         Serial.print(".");
         attempts++;
     }
+    Serial.print(" [");
+    Serial.print(attempts * 500);
+    Serial.print("ms]");
     
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println();
-        Serial.println("WiFi connected!");
-        Serial.print("IP address: ");
+        Serial.println("[WiFi] WiFi connected!");
+        Serial.print("[WiFi] IP address: ");
         Serial.println(WiFi.localIP());
+        
+        // Get and display RSSI (signal strength)
+        int rssi = WiFi.RSSI();
+        Serial.print("[WiFi] Signal strength (RSSI): ");
+        Serial.print(rssi);
+        Serial.print(" dBm");
+        
+        // Add human-readable strength description
+        if (rssi > -50) {
+            Serial.println(" (Excellent)");
+        } else if (rssi >= -60 && rssi <= -50) {
+            Serial.println(" (Great)");
+        } else if (rssi >= -70 && rssi < -60) {
+            Serial.println(" (Good)");
+        } else if (rssi >= -80 && rssi < -70) {
+            Serial.println(" (Fair)");
+        } else if (rssi >= -90 && rssi < -80) {
+            Serial.println(" (Weak)");
+        } else {
+            Serial.println(" (Very Poor)");
+        }
+        
         _initialized = true;
         return true;
     } else {
         Serial.println();
-        Serial.println("WiFi connection failed!");
+        Serial.print("[WiFi] WiFi connection failed! Status: ");
+        Serial.println(getWifiStatusString(WiFi.status()));
         _initialized = false;
         return false;
     }

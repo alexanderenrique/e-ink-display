@@ -30,7 +30,8 @@ private:
     // Nemo API
     String _nemoToken;
     String _nemoUrl = SENSOR_APP_DEFAULT_NEMO_URL;
-    String _sensorId;
+    String _temperatureSensorId;
+    String _humiditySensorId;
 
     // Display: header line shown in red (e.g. "Gowning Room")
     String _sensorLocation;

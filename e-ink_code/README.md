@@ -21,11 +21,50 @@ The device cycles through multiple display modules, each showing different infor
 - I2C and SPI buses are disabled when not in use
 - Battery voltage monitoring and display
 
+#### Deep Sleep Implementation
+
+Deep sleep functionality is implemented but **currently disabled for testing**. Each app handles its own sleep cycle:
+
+**Current State (Testing)**:
+- All apps use `delay()` for timing between display cycles
+- Deep sleep code is present but commented out in each app's `loop()` method
+- This allows continuous operation for testing and debugging
+
+**Deep Sleep Code Location**:
+- **Fun App**: `firmware/apps/fun/app.cpp` (lines 202-205)
+- **Sensor App**: `firmware/apps/sensor/app.cpp` (lines 150-153)
+- **Shelf App**: `firmware/apps/shelf/app.cpp` (lines 55-58)
+
+**Implementation Details**:
+- Deep sleep is implemented in `PowerManager::enterDeepSleep()` (`firmware/core/power/power_manager.cpp`)
+- Uses ESP32's `esp_sleep_enable_timer_wakeup()` and `esp_deep_sleep_start()`
+- Sleep duration is controlled by `refreshIntervalMinutes` from BLE configuration
+- Wakeup cause detection is handled in `main.cpp` `setup()` to distinguish cold starts from deep sleep wakeups
+
+**To Enable Deep Sleep**:
+1. Uncomment the deep sleep code block in the desired app's `loop()` method
+2. The code uses `_power->enterDeepSleep(_refreshIntervalMinutes * 60)` to convert minutes to seconds
+3. For shelf app, add `refreshIntervalMinutes` configuration support from BLE (currently uses default 60 seconds)
+
+**Example (from Sensor App)**:
+```cpp
+// Wait before next cycle (or sleep)
+uint32_t delayMs = _refreshIntervalMinutes * 60UL * 1000UL;
+delay(delayMs);  // For testing
+
+// Optionally enter deep sleep
+// if (_power) {
+//     _power->enterDeepSleep(_refreshIntervalMinutes * 60); // Use refreshIntervalMinutes in seconds
+// }
+```
+
+**Note**: When deep sleep is enabled, the device will restart after each sleep cycle. The main loop does not directly call deep sleep - each app manages its own sleep/wake cycle independently.
+
 ### Device Configuration
 
 Devices can be configured in two ways:
 
-1. **Bluetooth Low Energy (BLE)**: On cold start, the device enters BLE mode for 60 seconds, allowing wireless configuration via mobile app or web client. See [Bluetooth Configuration](#bluetooth-configuration-cold-start-ble) section for details.
+1. **Bluetooth Low Energy (BLE)**: On cold start, the device enters BLE mode for 3 minutes, allowing wireless configuration via mobile app or web client. See [Bluetooth Configuration](#bluetooth-configuration-cold-start-ble) section for details.
 
 2. **Remote Server**: Each device can fetch its configuration from a remote server:
    - Device-specific configs: `https://ota.denton.works/config/devices/{name}.json`

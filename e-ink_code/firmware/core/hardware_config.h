@@ -25,7 +25,7 @@
 
 // Battery voltage range for percentage calculation
 #define BATTERY_HIGH_VOLTAGE 4.15f
-#define BATTERY_LOW_VOLTAGE  3.3f
+#define BATTERY_LOW_VOLTAGE  2.8f
 
 // ============================================================================
 // Network Configuration
