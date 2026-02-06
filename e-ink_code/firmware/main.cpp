@@ -22,6 +22,7 @@
 #include "apps/shelf/app.h"
 #endif
 #include "esp_sleep.h"
+#include "hardware_config.h"
 
 // Core managers
 WiFiManager wifiManager;
@@ -78,6 +79,40 @@ void setup() {
         case ESP_SLEEP_WAKEUP_TOUCHPAD: Serial.println("Wakeup caused by touchpad"); break;
         case ESP_SLEEP_WAKEUP_ULP: Serial.println("Wakeup caused by ULP program"); break;
         default: Serial.println("Wakeup was not caused by deep sleep"); break;
+    }
+
+    // Check battery level on wakeup
+    // If we woke from timer (likely from low battery sleep), check if battery has recovered
+    int batteryPercent = powerManager.getBatteryPercentage();
+    Serial.print("[Main] Battery level: ");
+    Serial.print(batteryPercent);
+    Serial.println("%");
+    
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // We woke from timer - could be from low battery sleep or normal sleep
+        // Check if battery is still low
+        if (batteryPercent < BATTERY_RESUME_THRESHOLD_PERCENT) {
+            Serial.println("[Main] Battery still low, showing message and entering low battery sleep");
+            displayManager.begin();
+            displayManager.displayLowBatteryMessage();
+            delay(2000); // Give time for message to be visible
+            powerManager.enterLowBatterySleep();
+            // Code never reaches here
+            return;
+        } else {
+            Serial.println("[Main] Battery recovered, resuming normal operation");
+        }
+    }
+    
+    // Check if battery is critically low (before starting normal operation)
+    if (batteryPercent <= BATTERY_LOW_THRESHOLD_PERCENT) {
+        Serial.println("[Main] Battery critically low, showing message and entering low battery sleep");
+        displayManager.begin();
+        displayManager.displayLowBatteryMessage();
+        delay(2000); // Give time for message to be visible
+        powerManager.enterLowBatterySleep();
+        // Code never reaches here
+        return;
     }
 
     // On cold start only (not wake from deep sleep), enable BLE for 60s or until connected
@@ -247,6 +282,18 @@ void setup() {
 void loop() {
     // Cold-start BLE: disable after 2 minutes or first connection
     coldStartBle.loop();
+
+    // Check battery level before running app
+    int batteryPercent = powerManager.getBatteryPercentage();
+    if (batteryPercent <= BATTERY_LOW_THRESHOLD_PERCENT) {
+        Serial.println("[Main] Battery critically low during operation, showing message and entering low battery sleep");
+        displayManager.begin();
+        displayManager.displayLowBatteryMessage();
+        delay(2000); // Give time for message to be visible
+        powerManager.enterLowBatterySleep();
+        // Code never reaches here
+        return;
+    }
 
     // While BLE config mode is active, keep showing the config screen (don't run app loop).
     // After BLE times out or config is received, run the app and it will update the display.

@@ -79,6 +79,25 @@ void PowerManager::enterDeepSleep(uint64_t sleepTimeSeconds) {
     // Code never reaches here - device will restart after wake
 }
 
+void PowerManager::enterLowBatterySleep() {
+    Serial.println("Entering low battery sleep mode (periodic wakeup to check battery)...");
+    
+    // Disable all peripherals before sleep
+    disablePeripherals();
+    
+    // Flush serial output before sleep
+    Serial.flush();
+    delay(100);
+    
+    // Configure deep sleep timer for periodic wakeup
+    // Wake up every LOW_BATTERY_WAKEUP_INTERVAL_SECONDS to check battery
+    esp_sleep_enable_timer_wakeup(LOW_BATTERY_WAKEUP_INTERVAL_SECONDS * 1000000ULL); // Convert to microseconds
+    
+    // Enter deep sleep
+    esp_deep_sleep_start();
+    // Code never reaches here - device will restart after wake
+}
+
 esp_sleep_wakeup_cause_t PowerManager::getWakeupCause() {
     return esp_sleep_get_wakeup_cause();
 }

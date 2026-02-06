@@ -15,6 +15,7 @@ public:
     
     // Sleep management
     void enterDeepSleep(uint64_t sleepTimeSeconds);
+    void enterLowBatterySleep();  // Enters sleep with periodic wakeup to check battery
     esp_sleep_wakeup_cause_t getWakeupCause();
     
     // Peripheral management

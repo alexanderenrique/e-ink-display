@@ -291,6 +291,36 @@ void DisplayManager::displayBluetoothConfigMode() {
     display.hibernate();
 }
 
+// Display low battery warning message
+void DisplayManager::displayLowBatteryMessage() {
+    initSPI();
+    display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    display.init(115200, true, 2, false);
+    display.setRotation(1); // Landscape orientation
+    display.setFont(&FreeMonoBold9pt7b);
+
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+
+        int yPos = 20;
+        int lineHeight = 25;
+        int startX = 10;
+        int maxWidth = 280;
+
+        // First line in red
+        display.setTextColor(GxEPD_RED);
+        int finalY = renderTextWithWrap("Battery Low", startX, yPos, maxWidth, lineHeight, GxEPD_RED);
+
+        // Second line in black
+        display.setTextColor(GxEPD_BLACK);
+        renderTextWithWrap("Please Charge", startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
+    } while (display.nextPage());
+
+    display.hibernate();
+}
+
 // Default display function for general text
 // First line in red, rest in black
 void DisplayManager::displayDefault(String text, int batteryPercent) {
