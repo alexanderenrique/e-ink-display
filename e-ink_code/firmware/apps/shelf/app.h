@@ -15,6 +15,19 @@ public:
     
     // App identification
     const char* getName() override { return "shelf"; }
+    
+    // Configuration (via BLE: bin ID, server URL, refresh interval)
+    bool configure(const JsonObject& config) override;
+
+private:
+    // Bin ID to look up
+    String _binId;
+    
+    // Server URL for bin lookup (e.g., "http://192.168.1.100:8080")
+    String _serverUrl;
+    
+    // Refresh interval in minutes (default: 5)
+    uint32_t _refreshIntervalMinutes = 5;
 };
 
 #endif // SHELF_APP_H

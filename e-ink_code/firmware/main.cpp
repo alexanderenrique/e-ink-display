@@ -180,6 +180,17 @@ void setup() {
             } else if (storedDoc.containsKey("sensor_location")) {
                 config["sensorLocation"] = storedDoc["sensor_location"];
             }
+            // Shelf app: bin ID, server URL
+            if (storedDoc.containsKey("binId")) {
+                config["binId"] = storedDoc["binId"];
+            } else if (storedDoc.containsKey("bin_id")) {
+                config["binId"] = storedDoc["bin_id"];
+            }
+            if (storedDoc.containsKey("serverUrl")) {
+                config["serverUrl"] = storedDoc["serverUrl"];
+            } else if (storedDoc.containsKey("server_url")) {
+                config["serverUrl"] = storedDoc["server_url"];
+            }
             
             String appConfigJson;
             serializeJson(appDoc, appConfigJson);
