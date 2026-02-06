@@ -180,16 +180,37 @@ void setup() {
             } else if (storedDoc.containsKey("sensor_location")) {
                 config["sensorLocation"] = storedDoc["sensor_location"];
             }
-            // Shelf app: bin ID, server URL
+            // Shelf app: bin ID, server host, server port
             if (storedDoc.containsKey("binId")) {
                 config["binId"] = storedDoc["binId"];
             } else if (storedDoc.containsKey("bin_id")) {
                 config["binId"] = storedDoc["bin_id"];
             }
-            if (storedDoc.containsKey("serverUrl")) {
-                config["serverUrl"] = storedDoc["serverUrl"];
-            } else if (storedDoc.containsKey("server_url")) {
-                config["serverUrl"] = storedDoc["server_url"];
+            if (storedDoc.containsKey("serverHost")) {
+                config["serverHost"] = storedDoc["serverHost"];
+            } else if (storedDoc.containsKey("server_host")) {
+                config["serverHost"] = storedDoc["server_host"];
+            }
+            if (storedDoc.containsKey("serverPort")) {
+                config["serverPort"] = storedDoc["serverPort"];
+            } else if (storedDoc.containsKey("server_port")) {
+                config["serverPort"] = storedDoc["server_port"];
+            }
+            // Legacy support: if serverUrl is provided, try to parse it
+            if (storedDoc.containsKey("serverUrl") || storedDoc.containsKey("server_url")) {
+                String serverUrl = storedDoc.containsKey("serverUrl") 
+                    ? storedDoc["serverUrl"].as<const char*>()
+                    : storedDoc["server_url"].as<const char*>();
+                // Try to parse URL format: http://host:port or host:port
+                int protocolEnd = serverUrl.indexOf("://");
+                String hostPort = (protocolEnd >= 0) ? serverUrl.substring(protocolEnd + 3) : serverUrl;
+                int colonPos = hostPort.indexOf(':');
+                if (colonPos > 0) {
+                    config["serverHost"] = hostPort.substring(0, colonPos);
+                    config["serverPort"] = hostPort.substring(colonPos + 1).toInt();
+                } else {
+                    config["serverHost"] = hostPort;
+                }
             }
             
             String appConfigJson;

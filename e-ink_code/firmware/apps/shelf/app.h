@@ -23,11 +23,15 @@ private:
     // Bin ID to look up
     String _binId;
     
-    // Server URL for bin lookup (e.g., "http://192.168.1.100:8080")
-    String _serverUrl;
+    // Server host and port for bin lookup
+    String _serverHost;
+    uint16_t _serverPort;
     
     // Refresh interval in minutes (default: 5)
     uint32_t _refreshIntervalMinutes = 5;
+    
+    // Helper to build server URL from host and port
+    String buildServerUrl() const;
 };
 
 #endif // SHELF_APP_H

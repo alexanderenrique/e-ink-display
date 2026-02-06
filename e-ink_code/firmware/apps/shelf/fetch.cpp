@@ -75,7 +75,8 @@ String fetchShelfData(const char* binId, const char* serverUrl) {
     }
     
     // Build display string
-    String result = "Bin: " + String(binId) + "\n";
+    // Format: bin number (red), owner name (black), email (black)
+    String result = String(binId) + "\n";
     
     // Check if owner exists
     if (doc.containsKey("owner") && !doc["owner"].isNull()) {
@@ -91,7 +92,7 @@ String fetchShelfData(const char* binId, const char* serverUrl) {
             ownerName = "User " + String(owner["id"].as<int>());
         }
         
-        result += "Owner: " + ownerName + "\n";
+        result += ownerName + "\n";
         
         // Add email if available
         if (owner.containsKey("email")) {
@@ -102,14 +103,6 @@ String fetchShelfData(const char* binId, const char* serverUrl) {
         }
     } else {
         result += "No owner assigned";
-    }
-    
-    // Add bin name if available and different from ID
-    if (doc.containsKey("bin_name")) {
-        String binName = doc["bin_name"].as<String>();
-        if (binName.length() > 0 && binName != binId) {
-            result += "\n" + binName;
-        }
     }
     
     Serial.println("[ShelfApp] fetchShelfData: Success");

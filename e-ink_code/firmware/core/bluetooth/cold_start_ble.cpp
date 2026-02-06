@@ -103,6 +103,38 @@ static void processPendingConfig() {
         serializeJson(doc["apis"], apisJson);
         preferences.putString("apis", apisJson);
     }
+    // Shelf app: bin ID, server host, server port
+    if (doc.containsKey("binId")) {
+        preferences.putString("binId", doc["binId"].as<const char*>());
+    } else if (doc.containsKey("bin_id")) {
+        preferences.putString("binId", doc["bin_id"].as<const char*>());
+    }
+    if (doc.containsKey("serverHost")) {
+        preferences.putString("serverHost", doc["serverHost"].as<const char*>());
+    } else if (doc.containsKey("server_host")) {
+        preferences.putString("serverHost", doc["server_host"].as<const char*>());
+    }
+    if (doc.containsKey("serverPort")) {
+        preferences.putUInt("serverPort", doc["serverPort"].as<uint16_t>());
+    } else if (doc.containsKey("server_port")) {
+        preferences.putUInt("serverPort", doc["server_port"].as<uint16_t>());
+    }
+    // Legacy support: if serverUrl is provided, try to parse it
+    if (doc.containsKey("serverUrl") || doc.containsKey("server_url")) {
+        String serverUrl = doc.containsKey("serverUrl") 
+            ? doc["serverUrl"].as<const char*>()
+            : doc["server_url"].as<const char*>();
+        // Try to parse URL format: http://host:port or host:port
+        int protocolEnd = serverUrl.indexOf("://");
+        String hostPort = (protocolEnd >= 0) ? serverUrl.substring(protocolEnd + 3) : serverUrl;
+        int colonPos = hostPort.indexOf(':');
+        if (colonPos > 0) {
+            preferences.putString("serverHost", hostPort.substring(0, colonPos));
+            preferences.putUInt("serverPort", hostPort.substring(colonPos + 1).toInt());
+        } else {
+            preferences.putString("serverHost", hostPort);
+        }
+    }
     preferences.putString("configJson", jsonString);
     preferences.putBool("skipBLE", true);
     preferences.end();
