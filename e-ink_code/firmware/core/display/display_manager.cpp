@@ -302,7 +302,7 @@ void DisplayManager::displayLowBatteryMessage() {
     display.setFullWindow();
     display.firstPage();
     do {
-        display.fillScreen(GxEPD_WHITE);
+        display.fillScreen(GxEPD_BLACK);
 
         int yPos = 20;
         int lineHeight = 25;
@@ -310,12 +310,12 @@ void DisplayManager::displayLowBatteryMessage() {
         int maxWidth = 280;
 
         // First line in red
-        display.setTextColor(GxEPD_RED);
-        int finalY = renderTextWithWrap("Battery Low", startX, yPos, maxWidth, lineHeight, GxEPD_RED);
+        display.setTextColor(GxEPD_WHITE);
+        int finalY = renderTextWithWrap("Battery Low", startX, yPos, maxWidth, lineHeight, GxEPD_WHITE);
 
         // Second line in black
-        display.setTextColor(GxEPD_BLACK);
-        renderTextWithWrap("Please Charge", startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
+        display.setTextColor(GxEPD_WHITE);
+        renderTextWithWrap("Please Charge", startX, finalY, maxWidth, lineHeight, GxEPD_WHITE);
     } while (display.nextPage());
 
     display.hibernate();
