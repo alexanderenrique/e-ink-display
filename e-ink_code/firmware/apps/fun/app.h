@@ -24,8 +24,8 @@ private:
     // 0=room_data, 1=earthquake, 2=cat_facts, 3=iss, 4=useless_facts
     static RTC_DATA_ATTR int displayMode;
     
-    // Refresh interval in minutes (default: 30 minutes)
-    uint32_t _refreshIntervalMinutes = 30;
+    // Refresh interval in minutes (default: 2 minutes)
+    uint32_t _refreshIntervalMinutes = 2;
     
     // API enable flags from config (which data sources to show)
     bool _apiRoomData = true;

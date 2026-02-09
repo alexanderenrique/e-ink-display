@@ -257,8 +257,23 @@ void setup() {
             if (appManager.configureFromJson(appConfigJson.c_str())) {
                 Serial.println("[Main] Stored configuration loaded successfully");
             } else {
-                Serial.println("[Main] Failed to apply stored config, using default");
-                appManager.setActiveApp(DEFAULT_APP_NAME);
+                // Requested app (e.g. shelf) not in this build; apply config to default app instead
+                Serial.print("[Main] Requested app not in firmware, applying stored config to default app: ");
+                Serial.println(DEFAULT_APP_NAME);
+                DynamicJsonDocument fallbackDoc(2048);
+                DeserializationError fallbackError = deserializeJson(fallbackDoc, appConfigJson);
+                if (!fallbackError && fallbackDoc.containsKey("config")) {
+                    fallbackDoc["app"] = DEFAULT_APP_NAME;
+                    String fallbackJson;
+                    serializeJson(fallbackDoc, fallbackJson);
+                    if (appManager.configureFromJson(fallbackJson.c_str())) {
+                        Serial.println("[Main] Stored config applied to default app");
+                    } else {
+                        appManager.setActiveApp(DEFAULT_APP_NAME);
+                    }
+                } else {
+                    appManager.setActiveApp(DEFAULT_APP_NAME);
+                }
             }
         } else {
             Serial.println("[Main] Failed to parse stored config, using default");
