@@ -18,6 +18,7 @@ public:
     
     // Display functions
     void displayDefault(String text, int batteryPercent = -1);
+    void displayTextOnly(String text, int batteryPercent = -1);
     void displayEarthquakeFact(String earthquakeData, int batteryPercent = -1);
     void displayISSData(String issData, int batteryPercent = -1);
     void displayBluetoothConfigMode();

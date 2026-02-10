@@ -155,7 +155,7 @@ void DisplayManager::displayEarthquakeFact(String earthquakeData, int batteryPer
     initSPI();
     display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
     display.init(115200, true, 2, false);
-    display.setRotation(-1); // Landscape orientation
+    display.setRotation(1); // Landscape orientation
     display.setFont(&FreeMonoBold9pt7b);
     
     display.setFullWindow();
@@ -316,6 +316,30 @@ void DisplayManager::displayLowBatteryMessage() {
         // Second line in black
         display.setTextColor(GxEPD_WHITE);
         renderTextWithWrap("Please Charge", startX, finalY, maxWidth, lineHeight, GxEPD_WHITE);
+    } while (display.nextPage());
+
+    display.hibernate();
+}
+
+// Display function for text only (all black, no red header)
+void DisplayManager::displayTextOnly(String text, int batteryPercent) {
+    initSPI();
+    display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    display.init(115200, true, 2, false);
+    display.setRotation(1); // Landscape orientation
+    display.setFont(&FreeMonoBold9pt7b);
+
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+
+        if (batteryPercent >= 0) {
+            displayBatteryPercentage(batteryPercent);
+        }
+
+        display.setTextColor(GxEPD_BLACK);
+        renderTextWithWrap(text, 10, 20, 280, 25, GxEPD_BLACK);
     } while (display.nextPage());
 
     display.hibernate();

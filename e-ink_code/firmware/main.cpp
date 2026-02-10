@@ -16,10 +16,14 @@
 #if defined(APP_SHELF)
 #include "apps/shelf/app.h"
 #endif
-#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF)
+#if defined(APP_MESSAGES)
+#include "apps/messages/app.h"
+#endif
+#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF) && !defined(APP_MESSAGES)
 #include "apps/fun/app.h"
 #include "apps/sensor/app.h"
 #include "apps/shelf/app.h"
+#include "apps/messages/app.h"
 #endif
 #include "esp_sleep.h"
 #include "hardware_config.h"
@@ -44,10 +48,14 @@ SensorApp sensorApp;
 #if defined(APP_SHELF)
 ShelfApp shelfApp;
 #endif
-#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF)
+#if defined(APP_MESSAGES)
+MessagesApp messagesApp;
+#endif
+#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF) && !defined(APP_MESSAGES)
 FunApp funApp;
 SensorApp sensorApp;
 ShelfApp shelfApp;
+MessagesApp messagesApp;
 #endif
 
 // Default app name for this build (first available)
@@ -57,6 +65,8 @@ ShelfApp shelfApp;
 #define DEFAULT_APP_NAME "sensor"
 #elif defined(APP_SHELF)
 #define DEFAULT_APP_NAME "shelf"
+#elif defined(APP_MESSAGES)
+#define DEFAULT_APP_NAME "messages"
 #else
 #define DEFAULT_APP_NAME "fun"  // all apps or fallback
 #endif
@@ -140,10 +150,14 @@ void setup() {
 #if defined(APP_SHELF)
     appManager.registerApp(&shelfApp, "shelf");
 #endif
-#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF)
+#if defined(APP_MESSAGES)
+    appManager.registerApp(&messagesApp, "messages");
+#endif
+#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF) && !defined(APP_MESSAGES)
     appManager.registerApp(&funApp, "fun");
     appManager.registerApp(&sensorApp, "sensor");
     appManager.registerApp(&shelfApp, "shelf");
+    appManager.registerApp(&messagesApp, "messages");
 #endif
 
     // Try to load configuration from Preferences (stored via BLE)
@@ -230,6 +244,23 @@ void setup() {
                 config["serverPort"] = storedDoc["serverPort"];
             } else if (storedDoc.containsKey("server_port")) {
                 config["serverPort"] = storedDoc["server_port"];
+            }
+            // Messages app: array of up to 10 messages
+            if (storedDoc.containsKey("messages") && storedDoc["messages"].is<JsonArray>()) {
+                config["messages"] = storedDoc["messages"];
+            } else {
+                bool hasMessage = false;
+                JsonArray msgArr;
+                for (int i = 1; i <= 10; i++) {
+                    String key = "message" + String(i);
+                    if (storedDoc.containsKey(key.c_str())) {
+                        if (!hasMessage) {
+                            msgArr = config.createNestedArray("messages");
+                            hasMessage = true;
+                        }
+                        msgArr.add(storedDoc[key.c_str()]);
+                    }
+                }
             }
             // Legacy support: if serverUrl is provided, try to parse it
             if (storedDoc.containsKey("serverUrl") || storedDoc.containsKey("server_url")) {

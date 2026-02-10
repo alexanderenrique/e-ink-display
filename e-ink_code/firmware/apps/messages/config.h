@@ -1,0 +1,9 @@
+#ifndef MESSAGES_APP_CONFIG_H
+#define MESSAGES_APP_CONFIG_H
+
+// Messages app configuration
+
+#define MESSAGES_APP_MAX_MESSAGES 10
+#define MESSAGES_APP_DEFAULT_REFRESH_MINUTES 5
+
+#endif // MESSAGES_APP_CONFIG_H

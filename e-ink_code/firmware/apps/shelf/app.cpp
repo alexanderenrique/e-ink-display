@@ -148,19 +148,16 @@ void ShelfApp::loop() {
         _wifi->disconnect();
     }
     
-    // Wait before next cycle (or sleep)
-    uint32_t delayMs = _refreshIntervalMinutes * 60UL * 1000UL;
-    Serial.print("[ShelfApp] Waiting ");
-    Serial.print(_refreshIntervalMinutes);
-    Serial.print(" minutes (");
-    Serial.print(delayMs);
-    Serial.println(" ms) before next cycle");
-    delay(delayMs);
-    
-    // Optionally enter deep sleep
-    // if (_power) {
-    //     _power->enterDeepSleep(_refreshIntervalMinutes * 60); // Use refreshIntervalMinutes in seconds
-    // }
+    // Enter deep sleep until next cycle (or delay if no power manager)
+    uint32_t sleepSeconds = _refreshIntervalMinutes * 60UL;
+    if (_power) {
+        Serial.print("[ShelfApp] Entering deep sleep for ");
+        Serial.print(_refreshIntervalMinutes);
+        Serial.println(" min");
+        _power->enterDeepSleep(sleepSeconds);
+    } else {
+        delay(sleepSeconds * 1000UL);
+    }
 }
 
 void ShelfApp::end() {
