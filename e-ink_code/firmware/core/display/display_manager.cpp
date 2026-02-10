@@ -95,6 +95,7 @@ int DisplayManager::renderTextWithWrap(String text, int startX, int startY, int 
         
         // Look ahead to next word to avoid orphaned short words
         bool shouldWrap = false;
+        int wordSpacing = 10; // Double spacing between words for better readability
         if (!fitsOnCurrentLine && xPos > startX) {
             // Word doesn't fit, need to wrap
             shouldWrap = true;
@@ -103,10 +104,10 @@ int DisplayManager::renderTextWithWrap(String text, int startX, int startY, int 
             String nextWord = words[i + 1];
             int16_t nx1, ny1;
             uint16_t nw, nh;
-            display.getTextBounds(nextWord, xPos + w + 5, yPos, &nx1, &ny1, &nw, &nh);
+            display.getTextBounds(nextWord, xPos + w + wordSpacing, yPos, &nx1, &ny1, &nw, &nh);
             
             // If next word wouldn't fit, and current word is short (<= 4 chars), wrap both
-            if (xPos + w + 5 + nw > maxWidth && currentWord.length() <= 4) {
+            if (xPos + w + wordSpacing + nw > maxWidth && currentWord.length() <= 4) {
                 shouldWrap = true;
             }
         }
@@ -120,7 +121,7 @@ int DisplayManager::renderTextWithWrap(String text, int startX, int startY, int 
         
         display.setCursor(xPos, yPos);
         display.print(currentWord);
-        xPos += w + 5; // Space between words
+        xPos += w + wordSpacing; // Double spacing between words
     }
     
     // Return final Y position (add lineHeight for next line)
@@ -247,13 +248,13 @@ void DisplayManager::displayISSData(String issData, int batteryPercent) {
             // First line in red, rest in black
             if (lineNum == 0) {
                 display.setTextColor(GxEPD_RED);
+                int finalY = renderTextWithWrap(line, startX, yPos, maxWidth, lineHeight, GxEPD_RED);
+                yPos = finalY;
             } else {
                 display.setTextColor(GxEPD_BLACK);
+                int finalY = renderTextWithWrap(line, startX, yPos, maxWidth, lineHeight, GxEPD_BLACK);
+                yPos = finalY;
             }
-            
-            display.setCursor(startX, yPos);
-            display.print(line);
-            yPos += lineHeight;
             lineNum++;
         }
     } while (display.nextPage());

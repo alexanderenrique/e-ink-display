@@ -47,6 +47,14 @@ bool MessagesApp::configure(const JsonObject& config) {
 
 bool MessagesApp::begin() {
     Serial.println("[MessagesApp] Starting Messages App");
+    // Find the first non-empty message
+    _currentMessageIndex = 0;
+    for (int i = 0; i < _messageCount; i++) {
+        if (_messages[i].length() > 0) {
+            _currentMessageIndex = i;
+            break;
+        }
+    }
 
     if (_display) {
         _display->begin();
@@ -55,17 +63,31 @@ bool MessagesApp::begin() {
 }
 
 String MessagesApp::buildDisplayText() const {
-    String out;
-    for (int i = 0; i < _messageCount; i++) {
-        if (_messages[i].length() > 0) {
-            if (out.length() > 0) out += "\n";
-            out += _messages[i];
+    // Return the current message if it's not empty
+    if (_currentMessageIndex < _messageCount && _messages[_currentMessageIndex].length() > 0) {
+        return _messages[_currentMessageIndex];
+    }
+    
+    // If no valid message found, return default message
+    return "No messages configured.\nAdd messages via BLE config.";
+}
+
+void MessagesApp::advanceToNextMessage() {
+    // Find the next non-empty message
+    int startIndex = _currentMessageIndex;
+    int attempts = 0;
+    
+    do {
+        _currentMessageIndex = (_currentMessageIndex + 1) % _messageCount;
+        attempts++;
+        
+        // If we've checked all messages and none are valid, stop
+        if (attempts >= _messageCount) {
+            // Reset to start if we've gone through all messages
+            _currentMessageIndex = startIndex;
+            break;
         }
-    }
-    if (out.length() == 0) {
-        out = "No messages configured.\nAdd messages via BLE config.";
-    }
-    return out;
+    } while (_messages[_currentMessageIndex].length() == 0);
 }
 
 void MessagesApp::loop() {
@@ -74,6 +96,7 @@ void MessagesApp::loop() {
         batteryPercent = _power->getBatteryPercentage();
     }
 
+    // Display the current message
     String text = buildDisplayText();
     if (_display) {
         renderMessages(_display, text, batteryPercent);
@@ -83,6 +106,10 @@ void MessagesApp::loop() {
         _display->disableSPI();
     }
 
+    // Advance to the next message for next loop iteration
+    advanceToNextMessage();
+
+    // Sleep for the refresh interval before displaying next message
     uint32_t sleepSeconds = _refreshIntervalMinutes * 60UL;
     if (_power) {
         Serial.print("[MessagesApp] Entering deep sleep for ");

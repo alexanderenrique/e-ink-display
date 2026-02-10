@@ -7,14 +7,19 @@ pio run --target clean
 pio run -e seeed_xiao_fun -t upload
 pio device monitor
 
-## SENSOR APP
+## MESSAGES APP
 pio run --target clean
-pio run -e seeed_xiao_sensor -t upload
+pio run -e seeed_xiao_messages -t upload
 pio device monitor
 
 ## SHELF APP
 pio run --target clean
 pio run -e seeed_xiao_shelf -t upload
+pio device monitor
+
+## SENSOR APP
+pio run --target clean
+pio run -e seeed_xiao_sensor -t upload
 pio device monitor
 
 # Start the ble monitor
