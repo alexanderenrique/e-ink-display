@@ -60,6 +60,13 @@ float PowerManager::getBatteryVoltage() {
 }
 
 void PowerManager::enterDeepSleep(uint64_t sleepTimeSeconds) {
+ #if DISABLE_DEEP_SLEEP_FOR_TESTING
+    Serial.print("[TESTING] Deep sleep disabled - delaying for ");
+    Serial.print(sleepTimeSeconds);
+    Serial.println(" seconds...");
+    delay((uint32_t)sleepTimeSeconds * 1000UL);
+    return;
+#endif
     Serial.print("Entering deep sleep for ");
     Serial.print(sleepTimeSeconds);
     Serial.println(" seconds...");
@@ -80,6 +87,11 @@ void PowerManager::enterDeepSleep(uint64_t sleepTimeSeconds) {
 }
 
 void PowerManager::enterLowBatterySleep() {
+#if DISABLE_DEEP_SLEEP_FOR_TESTING
+    Serial.println("[TESTING] Low battery sleep disabled - delaying 60s...");
+    delay(60000);
+    return;
+#endif
     Serial.println("Entering low battery sleep mode (periodic wakeup to check battery)...");
     
     // Disable all peripherals before sleep

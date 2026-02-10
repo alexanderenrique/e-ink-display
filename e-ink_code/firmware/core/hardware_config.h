@@ -27,6 +27,9 @@
 #define BATTERY_HIGH_VOLTAGE 4.15f
 #define BATTERY_LOW_VOLTAGE  2.8f
 
+// Set to 1 to use delay() instead of deep sleep (keeps Serial and USB alive for testing)
+#define DISABLE_DEEP_SLEEP_FOR_TESTING 1
+
 // Battery management thresholds
 #define BATTERY_LOW_THRESHOLD_PERCENT  5   // Enter low battery sleep mode at this level
 #define BATTERY_RESUME_THRESHOLD_PERCENT 15  // Resume normal operation when battery reaches this level
