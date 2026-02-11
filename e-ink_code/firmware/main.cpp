@@ -129,9 +129,10 @@ void setup() {
     coldStartBle.begin(wakeup_reason);
 
     // When in BLE config mode, show config screen on display
+    // Always show the actual firmware app installed, not the config app
     if (coldStartBle.isActive()) {
         displayManager.begin();
-        displayManager.displayBluetoothConfigMode();
+        displayManager.displayBluetoothConfigMode(DEFAULT_APP_NAME);
     }
 
     // Initialize app manager with core managers
@@ -285,26 +286,15 @@ void setup() {
             Serial.print("[Main] Transformed config: ");
             Serial.println(appConfigJson);
             
+            // Try to configure with the stored config
+            // If the app doesn't exist, silently fall back to default (this is loading from NVS, not receiving via BLE)
             if (appManager.configureFromJson(appConfigJson.c_str())) {
                 Serial.println("[Main] Stored configuration loaded successfully");
             } else {
-                // Requested app (e.g. shelf) not in this build; apply config to default app instead
-                Serial.print("[Main] Requested app not in firmware, applying stored config to default app: ");
+                // Requested app not in firmware - silently fall back to default
+                Serial.print("[Main] Requested app not in firmware, using default app: ");
                 Serial.println(DEFAULT_APP_NAME);
-                DynamicJsonDocument fallbackDoc(2048);
-                DeserializationError fallbackError = deserializeJson(fallbackDoc, appConfigJson);
-                if (!fallbackError && fallbackDoc.containsKey("config")) {
-                    fallbackDoc["app"] = DEFAULT_APP_NAME;
-                    String fallbackJson;
-                    serializeJson(fallbackDoc, fallbackJson);
-                    if (appManager.configureFromJson(fallbackJson.c_str())) {
-                        Serial.println("[Main] Stored config applied to default app");
-                    } else {
-                        appManager.setActiveApp(DEFAULT_APP_NAME);
-                    }
-                } else {
-                    appManager.setActiveApp(DEFAULT_APP_NAME);
-                }
+                appManager.setActiveApp(DEFAULT_APP_NAME);
             }
         } else {
             Serial.println("[Main] Failed to parse stored config, using default");

@@ -21,8 +21,9 @@ public:
     void displayTextOnly(String text, int batteryPercent = -1);
     void displayEarthquakeFact(String earthquakeData, int batteryPercent = -1);
     void displayISSData(String issData, int batteryPercent = -1);
-    void displayBluetoothConfigMode();
+    void displayBluetoothConfigMode(const char* appName = nullptr);
     void displayLowBatteryMessage();
+    void displayConfigMismatchError(const char* configApp, const char* firmwareApp);
     
     // Helper functions
     int renderTextWithWrap(String text, int startX, int startY, int maxWidth, int lineHeight, uint16_t textColor);

@@ -263,7 +263,7 @@ void DisplayManager::displayISSData(String issData, int batteryPercent) {
 }
 
 // Display shown on cold boot when in BLE configuration mode
-void DisplayManager::displayBluetoothConfigMode() {
+void DisplayManager::displayBluetoothConfigMode(const char* appName) {
     initSPI();
     display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
     display.init(115200, true, 2, false);
@@ -284,7 +284,19 @@ void DisplayManager::displayBluetoothConfigMode() {
         display.setTextColor(GxEPD_RED);
         int finalY = renderTextWithWrap("Bluetooth Config Mode", startX, yPos, maxWidth, lineHeight, GxEPD_RED);
 
-        // Second line in black
+        // Second line: Firmware App name (if provided)
+        if (appName != nullptr && strlen(appName) > 0) {
+            display.setTextColor(GxEPD_BLACK);
+            String firmwareLine = "Firmware App: ";
+            firmwareLine += appName;
+            // Capitalize first letter
+            if (firmwareLine.length() > 14) {
+                firmwareLine.setCharAt(14, toupper(firmwareLine.charAt(14)));
+            }
+            finalY = renderTextWithWrap(firmwareLine, startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
+        }
+
+        // Third line in black
         display.setTextColor(GxEPD_BLACK);
         renderTextWithWrap("Visit Denton.Works/e-ink to configure your display", startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
     } while (display.nextPage());
@@ -317,6 +329,62 @@ void DisplayManager::displayLowBatteryMessage() {
         // Second line in black
         display.setTextColor(GxEPD_WHITE);
         renderTextWithWrap("Please Charge", startX, finalY, maxWidth, lineHeight, GxEPD_WHITE);
+    } while (display.nextPage());
+
+    display.hibernate();
+}
+
+// Display config mismatch error
+void DisplayManager::displayConfigMismatchError(const char* configApp, const char* firmwareApp) {
+    initSPI();
+    display.epd2.selectSPI(SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    display.init(115200, true, 2, false);
+    display.setRotation(1); // Landscape orientation
+    display.setFont(&FreeMonoBold9pt7b);
+
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+
+        int yPos = 20;
+        int lineHeight = 25;
+        int startX = 10;
+        int maxWidth = 280;
+
+        // First line in red - error header
+        display.setTextColor(GxEPD_RED);
+        int finalY = renderTextWithWrap("Config Mismatch!", startX, yPos, maxWidth, lineHeight, GxEPD_RED);
+
+        // Second line: config app received
+        display.setTextColor(GxEPD_BLACK);
+        String configLine = "";
+        if (configApp != nullptr && strlen(configApp) > 0) {
+            configLine = String(configApp);
+            // Capitalize first letter
+            if (configLine.length() > 0) {
+                configLine.setCharAt(0, toupper(configLine.charAt(0)));
+            }
+            configLine = configLine + " config received";
+        } else {
+            configLine = "Unknown config received";
+        }
+        finalY = renderTextWithWrap(configLine, startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
+
+        // Third line: firmware app installed
+        display.setTextColor(GxEPD_BLACK);
+        String firmwareLine = "";
+        if (firmwareApp != nullptr && strlen(firmwareApp) > 0) {
+            firmwareLine = String(firmwareApp);
+            // Capitalize first letter
+            if (firmwareLine.length() > 0) {
+                firmwareLine.setCharAt(0, toupper(firmwareLine.charAt(0)));
+            }
+            firmwareLine = "but " + firmwareLine + " firmware installed";
+        } else {
+            firmwareLine = "but unknown firmware installed";
+        }
+        renderTextWithWrap(firmwareLine, startX, finalY, maxWidth, lineHeight, GxEPD_BLACK);
     } while (display.nextPage());
 
     display.hibernate();

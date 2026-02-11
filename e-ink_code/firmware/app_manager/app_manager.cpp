@@ -195,3 +195,15 @@ const char* AppManager::getActiveAppName() {
     }
     return nullptr;
 }
+
+bool AppManager::hasApp(const char* name) {
+    if (name == nullptr) {
+        return false;
+    }
+    for (int i = 0; i < _appCount; i++) {
+        if (strcmp(_appNames[i], name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}

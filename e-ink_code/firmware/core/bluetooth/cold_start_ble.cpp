@@ -3,6 +3,10 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include "../display/display_manager.h"
+
+// Forward declaration
+extern DisplayManager displayManager;
 
 // Compile-time check for BLE support
 #ifndef CONFIG_BT_ENABLED
@@ -36,6 +40,63 @@
 static char s_pendingConfigBuffer[PENDING_CONFIG_MAX];
 static size_t s_pendingConfigLength = 0;
 static bool s_pendingConfig = false;
+
+// Default app name for this build (matches main.cpp)
+#if defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF) && !defined(APP_MESSAGES)
+#define DEFAULT_APP_NAME "fun"
+#elif defined(APP_SENSOR)
+#define DEFAULT_APP_NAME "sensor"
+#elif defined(APP_SHELF)
+#define DEFAULT_APP_NAME "shelf"
+#elif defined(APP_MESSAGES)
+#define DEFAULT_APP_NAME "messages"
+#else
+#define DEFAULT_APP_NAME "fun"  // all apps or fallback
+#endif
+
+// Helper function to check if an app is available in this firmware build
+static bool isAppAvailable(const char* appName) {
+    if (appName == nullptr) return false;
+    
+#if !defined(APP_FUN) && !defined(APP_SENSOR) && !defined(APP_SHELF) && !defined(APP_MESSAGES)
+    // All apps available
+    return (strcmp(appName, "fun") == 0 || 
+            strcmp(appName, "sensor") == 0 || 
+            strcmp(appName, "shelf") == 0 || 
+            strcmp(appName, "messages") == 0);
+#else
+    // Check individual app flags
+    if (strcmp(appName, "fun") == 0) {
+        #if defined(APP_FUN)
+        return true;
+        #else
+        return false;
+        #endif
+    }
+    if (strcmp(appName, "sensor") == 0) {
+        #if defined(APP_SENSOR)
+        return true;
+        #else
+        return false;
+        #endif
+    }
+    if (strcmp(appName, "shelf") == 0) {
+        #if defined(APP_SHELF)
+        return true;
+        #else
+        return false;
+        #endif
+    }
+    if (strcmp(appName, "messages") == 0) {
+        #if defined(APP_MESSAGES)
+        return true;
+        #else
+        return false;
+        #endif
+    }
+    return false;
+#endif
+}
 
 /** Callback that sets a flag when a central connects.
  *  Keep this minimal (no Serial, no allocation): runs in BLE task context; heavy work can crash.
@@ -87,6 +148,26 @@ static void processPendingConfig() {
         Serial.print("[ColdStartBle] JSON parse error: ");
         Serial.println(error.c_str());
         return;
+    }
+    
+    // Validate that the requested app exists in this firmware build
+    if (doc.containsKey("mode")) {
+        const char* requestedApp = doc["mode"].as<const char*>();
+        if (!isAppAvailable(requestedApp)) {
+            // Config app doesn't match firmware - show error and don't store/restart
+            Serial.print("[ColdStartBle] Config mismatch: ");
+            Serial.print(requestedApp);
+            Serial.print(" config received, but ");
+            Serial.print(DEFAULT_APP_NAME);
+            Serial.println(" firmware installed!");
+            
+            displayManager.begin();
+            displayManager.displayConfigMismatchError(requestedApp, DEFAULT_APP_NAME);
+            
+            // Don't store config or restart - stay in error state
+            // User can reset or send new config via BLE
+            return;
+        }
     }
     Preferences preferences;
     preferences.begin("config", false);

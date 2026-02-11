@@ -38,6 +38,7 @@ public:
     const char* getAppName(int index);
     int getActiveAppIndex();
     const char* getActiveAppName();
+    bool hasApp(const char* name);
 
 private:
     static const int MAX_APPS = 10;
