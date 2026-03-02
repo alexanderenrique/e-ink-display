@@ -4,17 +4,22 @@
 // ============================================================================
 // Pin Definitions for ESP32-C3
 // ============================================================================
-#define SPI_SCK   21
-#define SPI_MOSI  7
+
+
 #define SPI_MISO  -1
-#define RST_PIN   6
-#define DC_PIN    5
-#define CS_PIN    4
-#define BUSY_PIN  3
+
+
 #define I2C_SDA   9
 #define I2C_SCL   10
 #define V_ADC     2
 #define V_SWITCH  8
+
+#define BUSY_PIN  21
+#define CS_PIN    7
+#define DC_PIN    6
+#define RST_PIN   5
+#define SPI_MOSI  4
+#define SPI_SCK   3
 
 // ============================================================================
 // Power Management Constants

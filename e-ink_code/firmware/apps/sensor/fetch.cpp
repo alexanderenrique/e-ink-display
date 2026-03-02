@@ -6,6 +6,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <time.h>
 
 static Adafruit_SHT31 sht31 = Adafruit_SHT31();
 static bool sht31Ready = false;
@@ -68,15 +69,45 @@ String fetchSensorData(bool useCelsius, bool wifiConnected) {
     return result;
 }
 
-bool postSensorDataToNemo(const char* url, const char* token, 
+bool syncTimeFromNtp(const char* ntpServer, long gmtOffsetSec, int daylightOffsetSec) {
+    if (ntpServer == nullptr || *ntpServer == '\0') return false;
+    configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
+    for (int i = 0; i < 50; i++) {
+        time_t now = time(nullptr);
+        if (now > 0) {
+            Serial.println("[SensorApp] NTP time synced");
+            return true;
+        }
+        delay(100);
+    }
+    Serial.println("[SensorApp] NTP time sync failed (timeout)");
+    return false;
+}
+
+String getIso8601CreatedDate(const char* timeZoneOffset) {
+    if (timeZoneOffset == nullptr) timeZoneOffset = SENSOR_APP_DEFAULT_TIMEZONE_OFFSET;
+    time_t now = time(nullptr);
+    if (now <= 0) return String();
+    struct tm timeinfo;
+    if (!localtime_r(&now, &timeinfo)) return String();
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+    return String(buf) + ".000000" + timeZoneOffset;
+}
+
+bool postSensorDataToNemo(const char* url, const char* token,
                           const char* temperatureSensorId, const char* humiditySensorId,
-                          float tempC, float humidity) {
+                          float tempC, float humidity, const char* createdDate) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[SensorApp] Nemo POST skipped: WiFi not connected");
         return false;
     }
     if (url == nullptr || *url == '\0' || token == nullptr) {
         Serial.println("[SensorApp] Nemo POST skipped: missing url/token");
+        return false;
+    }
+    if (createdDate == nullptr || *createdDate == '\0') {
+        Serial.println("[SensorApp] Nemo POST skipped: created_date required (sync time first)");
         return false;
     }
 
@@ -95,9 +126,10 @@ bool postSensorDataToNemo(const char* url, const char* token,
             http.addHeader("Content-Type", "application/json");
             http.addHeader("Authorization", String("Token ") + token);
 
-            DynamicJsonDocument doc(128);
+            DynamicJsonDocument doc(256);
             doc["sensor"] = atoi(temperatureSensorId);  // Convert string to int
             doc["value"] = roundf(tempC * 10.0f) / 10.0f;
+            doc["created_date"] = createdDate;
 
             String body;
             serializeJson(doc, body);
@@ -125,9 +157,10 @@ bool postSensorDataToNemo(const char* url, const char* token,
             http.addHeader("Content-Type", "application/json");
             http.addHeader("Authorization", String("Token ") + token);
 
-            DynamicJsonDocument doc(128);
+            DynamicJsonDocument doc(256);
             doc["sensor"] = atoi(humiditySensorId);  // Convert string to int
             doc["value"] = roundf(humidity * 10.0f) / 10.0f;
+            doc["created_date"] = createdDate;
 
             String body;
             serializeJson(doc, body);

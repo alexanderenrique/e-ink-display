@@ -230,6 +230,22 @@ void setup() {
             } else if (storedDoc.containsKey("sensor_location")) {
                 config["sensorLocation"] = storedDoc["sensor_location"];
             }
+            if (storedDoc.containsKey("timeServer")) {
+                config["timeServer"] = storedDoc["timeServer"];
+            } else if (storedDoc.containsKey("time_server")) {
+                config["timeServer"] = storedDoc["time_server"];
+            }
+            if (storedDoc.containsKey("timeZoneOffset")) {
+                config["timeZoneOffset"] = storedDoc["timeZoneOffset"];
+            } else if (storedDoc.containsKey("time_zone_offset")) {
+                config["timeZoneOffset"] = storedDoc["time_zone_offset"];
+            }
+            if (storedDoc.containsKey("gmtOffsetSec")) {
+                config["gmtOffsetSec"] = storedDoc["gmtOffsetSec"];
+            }
+            if (storedDoc.containsKey("daylightOffsetSec")) {
+                config["daylightOffsetSec"] = storedDoc["daylightOffsetSec"];
+            }
             // Shelf app: bin ID, server host, server port
             if (storedDoc.containsKey("binId")) {
                 config["binId"] = storedDoc["binId"];

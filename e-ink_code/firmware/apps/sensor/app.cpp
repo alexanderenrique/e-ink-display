@@ -72,6 +72,23 @@ bool SensorApp::configure(const JsonObject& config) {
         Serial.println(_sensorLocation);
     }
 
+    if (config.containsKey("timeServer")) {
+        _timeServer = config["timeServer"].as<const char*>();
+    } else if (config.containsKey("time_server")) {
+        _timeServer = config["time_server"].as<const char*>();
+    }
+    if (config.containsKey("timeZoneOffset")) {
+        _timeZoneOffset = config["timeZoneOffset"].as<const char*>();
+    } else if (config.containsKey("time_zone_offset")) {
+        _timeZoneOffset = config["time_zone_offset"].as<const char*>();
+    }
+    if (config.containsKey("gmtOffsetSec")) {
+        _gmtOffsetSec = config["gmtOffsetSec"].as<long>();
+    }
+    if (config.containsKey("daylightOffsetSec")) {
+        _daylightOffsetSec = config["daylightOffsetSec"].as<int>();
+    }
+
     return true;
 }
 
@@ -135,9 +152,21 @@ void SensorApp::loop() {
     if (_nemoToken.length() > 0 && _nemoUrl.length() > 0) {
         float tempC, humidity;
         if (getSensorReadingsRaw(tempC, humidity)) {
-            postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(),
-                                 _temperatureSensorId.c_str(), _humiditySensorId.c_str(),
-                                 tempC, humidity);
+            String createdDate;
+            if (wifiConnected) {
+                if (syncTimeFromNtp(_timeServer.c_str(), _gmtOffsetSec, _daylightOffsetSec)) {
+                    createdDate = getIso8601CreatedDate(_timeZoneOffset.c_str());
+                }
+                if (createdDate.length() > 0) {
+                    postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(),
+                                        _temperatureSensorId.c_str(), _humiditySensorId.c_str(),
+                                        tempC, humidity, createdDate.c_str());
+                } else {
+                    Serial.println("[SensorApp] Nemo POST skipped: could not get time for created_date");
+                }
+            } else {
+                Serial.println("[SensorApp] Nemo POST skipped: WiFi required for time sync and upload");
+            }
         }
     }
 

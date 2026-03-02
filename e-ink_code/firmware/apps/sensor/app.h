@@ -33,6 +33,12 @@ private:
     String _temperatureSensorId;
     String _humiditySensorId;
 
+    // Time sync for Nemo created_date (NTP server and timezone)
+    String _timeServer = SENSOR_APP_DEFAULT_TIME_SERVER;
+    long _gmtOffsetSec = SENSOR_APP_DEFAULT_GMT_OFFSET_SEC;
+    int _daylightOffsetSec = SENSOR_APP_DEFAULT_DAYLIGHT_OFFSET_SEC;
+    String _timeZoneOffset = SENSOR_APP_DEFAULT_TIMEZONE_OFFSET;
+
     // Display: header line shown in red (e.g. "Gowning Room")
     String _sensorLocation;
 };
