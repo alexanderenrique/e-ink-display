@@ -5,8 +5,19 @@
 #include "../../core/power/power_manager.h"
 #include "../../core/bluetooth/cold_start_ble.h"
 #include "../../core/wifi/wifi_manager.h"
+#include "../../core/hardware_config.h"
 
 SensorApp::SensorApp() {
+}
+
+static const char* tzRuleForSelection(const String& selection) {
+    if (selection == SENSOR_APP_TIMEZONE_PACIFIC) return SENSOR_APP_TZ_RULE_PACIFIC;
+    if (selection == SENSOR_APP_TIMEZONE_MOUNTAIN) return SENSOR_APP_TZ_RULE_MOUNTAIN;
+    if (selection == SENSOR_APP_TIMEZONE_CENTRAL) return SENSOR_APP_TZ_RULE_CENTRAL;
+    if (selection == SENSOR_APP_TIMEZONE_EASTERN) return SENSOR_APP_TZ_RULE_EASTERN;
+    if (selection == SENSOR_APP_TIMEZONE_ARIZONA) return SENSOR_APP_TZ_RULE_ARIZONA;
+    if (selection == SENSOR_APP_TIMEZONE_UTC) return SENSOR_APP_TZ_RULE_UTC;
+    return SENSOR_APP_DEFAULT_TZ_RULE;
 }
 
 bool SensorApp::configure(const JsonObject& config) {
@@ -77,17 +88,22 @@ bool SensorApp::configure(const JsonObject& config) {
     } else if (config.containsKey("time_server")) {
         _timeServer = config["time_server"].as<const char*>();
     }
-    if (config.containsKey("timeZoneOffset")) {
-        _timeZoneOffset = config["timeZoneOffset"].as<const char*>();
-    } else if (config.containsKey("time_zone_offset")) {
-        _timeZoneOffset = config["time_zone_offset"].as<const char*>();
+    // New timezone selection (preferred)
+    if (config.containsKey("timeZone")) {
+        _timeZone = config["timeZone"].as<const char*>();
+    } else if (config.containsKey("timezone")) {
+        _timeZone = config["timezone"].as<const char*>();
+    } else if (config.containsKey("time_zone")) {
+        _timeZone = config["time_zone"].as<const char*>();
     }
-    if (config.containsKey("gmtOffsetSec")) {
-        _gmtOffsetSec = config["gmtOffsetSec"].as<long>();
-    }
-    if (config.containsKey("daylightOffsetSec")) {
-        _daylightOffsetSec = config["daylightOffsetSec"].as<int>();
-    }
+    _timeZone.toLowerCase();
+    _tzRule = tzRuleForSelection(_timeZone);
+    Serial.print("[SensorApp] Timezone selection: ");
+    Serial.println(_timeZone.length() > 0 ? _timeZone : String(SENSOR_APP_DEFAULT_TIMEZONE));
+
+    // Legacy config support (kept for backwards compatibility; no longer used for local time)
+    if (config.containsKey("gmtOffsetSec")) _gmtOffsetSec = config["gmtOffsetSec"].as<long>();
+    if (config.containsKey("daylightOffsetSec")) _daylightOffsetSec = config["daylightOffsetSec"].as<int>();
 
     return true;
 }
@@ -107,6 +123,10 @@ bool SensorApp::begin() {
 }
 
 void SensorApp::loop() {
+    // Power on display and temperature sensor (MOSFET on pin 20; LOW = on)
+    pinMode(POWER_DISPLAY_SENSOR_PIN, OUTPUT);
+    digitalWrite(POWER_DISPLAY_SENSOR_PIN, LOW);
+
     int batteryPercent = -1;
     if (_power) {
         batteryPercent = _power->getBatteryPercentage();
@@ -115,6 +135,8 @@ void SensorApp::loop() {
     // Try to connect WiFi to show WiFi strength if available
     // Also connect if we have Nemo config for posting data
     bool wifiConnected = false;
+    bool timeSynced = false;
+    String lastUpdatedTime;
     if (_wifi) {
         String wifiSSID = ColdStartBle::getStoredWiFiSSID();
         String wifiPassword = ColdStartBle::getStoredWiFiPassword();
@@ -123,6 +145,22 @@ void SensorApp::loop() {
             wifiConnected = _wifi->begin(wifiSSID.c_str(), wifiPassword.c_str());
             if (wifiConnected) {
                 Serial.println("[SensorApp] WiFi connection successful - ready for Nemo API calls");
+                setTimezoneRule(_tzRule.c_str());
+                Serial.print("[SensorApp] Time server: ");
+                Serial.println(_timeServer);
+                Serial.print("[SensorApp] TZ rule: ");
+                Serial.println(_tzRule);
+                timeSynced = syncTimeFromNtp(_timeServer.c_str());
+                if (timeSynced) {
+                    // Re-apply TZ after NTP sync; some ESP32 configTime() paths can leave TZ unapplied for the first time() use
+                    setTimezoneRule(_tzRule.c_str());
+                    lastUpdatedTime = getLocalTimeForDisplay("%m/%d %H:%M");
+                    Serial.print("[SensorApp] Time displayed on e-ink: ");
+                    Serial.println(lastUpdatedTime);
+                    time_t now = time(nullptr);
+                    Serial.print("[SensorApp] Epoch when building display time: ");
+                    Serial.println((long)now);
+                }
             } else {
                 Serial.println("[SensorApp] WiFi connection failed - Nemo API calls will be skipped");
             }
@@ -131,8 +169,14 @@ void SensorApp::loop() {
         }
     }
 
+    // Single I2C read: use for both display and Nemo. Second read after display/SPI disable often fails (I2C -1).
     bool useCelsius = (_units == "C");
-    String sensorData = fetchSensorData(useCelsius, wifiConnected);
+    float tempC = 0.0f;
+    float humidity = 0.0f;
+    bool readOk = getSensorReadingsRaw(tempC, humidity);
+    String sensorData = readOk
+        ? formatSensorDataForDisplay(tempC, humidity, useCelsius, wifiConnected, lastUpdatedTime)
+        : "Sensor Error\nRead failed";
 
     // When location is set, use it as the red header line; otherwise use default title
     if (_sensorLocation.length() > 0) {
@@ -148,24 +192,26 @@ void SensorApp::loop() {
         _display->disableSPI();
     }
 
-    // Optionally POST to Nemo (use raw Celsius readings)
+    // Optionally POST to Nemo using the same readings (no second I2C read)
     if (_nemoToken.length() > 0 && _nemoUrl.length() > 0) {
-        float tempC, humidity;
-        if (getSensorReadingsRaw(tempC, humidity)) {
-            String createdDate;
-            if (wifiConnected) {
-                if (syncTimeFromNtp(_timeServer.c_str(), _gmtOffsetSec, _daylightOffsetSec)) {
-                    createdDate = getIso8601CreatedDate(_timeZoneOffset.c_str());
-                }
+        if (!readOk) {
+            Serial.println("[SensorApp] Nemo POST skipped: sensor read failed earlier");
+        } else if (!wifiConnected) {
+            Serial.println("[SensorApp] Nemo POST skipped: WiFi required for time sync and upload");
+        } else {
+            setTimezoneRule(_tzRule.c_str());
+            if (!timeSynced && !syncTimeFromNtp(_timeServer.c_str())) {
+                Serial.println("[SensorApp] Time sync failed before Nemo POST");
+            } else {
+                String createdDate = getIso8601CreatedDate();
                 if (createdDate.length() > 0) {
+                    Serial.println("[SensorApp] Nemo POST: calling postSensorDataToNemo");
                     postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(),
                                         _temperatureSensorId.c_str(), _humiditySensorId.c_str(),
                                         tempC, humidity, createdDate.c_str());
                 } else {
                     Serial.println("[SensorApp] Nemo POST skipped: could not get time for created_date");
                 }
-            } else {
-                Serial.println("[SensorApp] Nemo POST skipped: WiFi required for time sync and upload");
             }
         }
     }

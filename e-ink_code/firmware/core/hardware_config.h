@@ -12,7 +12,11 @@
 #define I2C_SDA   9
 #define I2C_SCL   10
 #define V_ADC     2
-#define V_SWITCH  8
+// Pin 20: enables voltage divider for battery measurement (LOW = on; power_manager drives it during read)
+#define V_SWITCH  20
+
+// Pin 8: MOSFET gate for power to temperature sensor and display (LOW = power on)
+#define POWER_DISPLAY_SENSOR_PIN 8
 
 #define BUSY_PIN  21
 #define CS_PIN    7

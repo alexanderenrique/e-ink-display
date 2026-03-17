@@ -227,20 +227,28 @@ static void processPendingConfig() {
 
 ColdStartBle::ColdStartBle() : _active(false), _startMillis(0), _connected(false) {}
 
-void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause) {
-    if (wakeup_cause != ESP_SLEEP_WAKEUP_UNDEFINED) {
-        Serial.print("[ColdStartBle] Skipping BLE mode - wakeup cause: ");
-        Serial.println(wakeup_cause);
+void ColdStartBle::begin(esp_sleep_wakeup_cause_t wakeup_cause, esp_reset_reason_t reset_reason, bool skip_ble) {
+    // Be permissive: if this boot was NOT caused by deep sleep, always allow BLE.
+    // This covers true power-on and also brownout / watchdog resets caused by inrush
+    // (e.g., display power rail changes) where esp_sleep_get_wakeup_cause() can be misleading.
+    if (reset_reason == ESP_RST_DEEPSLEEP) {
+        Serial.print("[ColdStartBle] Skipping BLE mode - deep sleep reset (wakeup cause=");
+        Serial.print(wakeup_cause);
+        Serial.println(")");
         return;
     }
 
-    // Check if we should skip BLE (e.g., after config-triggered restart)
-    if (shouldSkipBle()) {
-        Serial.println("[ColdStartBle] ✓ Skipping BLE mode - config was just received, applying changes");
+    // Skip BLE on this boot (e.g., immediately after config-triggered restart)
+    if (skip_ble) {
+        Serial.println("[ColdStartBle] ✓ Skipping BLE mode - skipBLE flag set");
         return;
     }
 
-    Serial.println("[ColdStartBle] Entering BLE mode (cold start detected)");
+    Serial.print("[ColdStartBle] Entering BLE mode (wakeup cause=");
+    Serial.print(wakeup_cause);
+    Serial.print(", reset reason=");
+    Serial.print((int)reset_reason);
+    Serial.println(")");
     
     // Disable WiFi to ensure BLE has exclusive access to the radio (ESP32C3 requirement)
     WiFi.mode(WIFI_OFF);

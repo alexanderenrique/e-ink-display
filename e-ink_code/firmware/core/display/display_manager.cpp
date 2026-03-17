@@ -23,6 +23,7 @@ void DisplayManager::initSPI() {
 }
 
 void DisplayManager::disableSPI() {
+    releaseDisplayPower();  // Power off display and temp sensor before releasing SPI pins
     SPI.end();
     Serial.println("SPI disabled");
     
@@ -35,7 +36,13 @@ void DisplayManager::disableSPI() {
     pinMode(BUSY_PIN, INPUT);
 }
 
+void DisplayManager::releaseDisplayPower() {
+    digitalWrite(POWER_DISPLAY_SENSOR_PIN, HIGH);
+}
+
 bool DisplayManager::begin() {
+    pinMode(POWER_DISPLAY_SENSOR_PIN, OUTPUT);
+    digitalWrite(POWER_DISPLAY_SENSOR_PIN, LOW);  // Power on display and temp sensor
     initSPI();
     display.init(115200, true, 2, false);
     _initialized = true;
@@ -44,6 +51,7 @@ bool DisplayManager::begin() {
 
 void DisplayManager::hibernate() {
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Helper function to render text with word wrapping
@@ -204,6 +212,7 @@ void DisplayManager::displayEarthquakeFact(String earthquakeData, int batteryPer
     } while (display.nextPage());
     
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Display function for ISS data
@@ -260,6 +269,7 @@ void DisplayManager::displayISSData(String issData, int batteryPercent) {
     } while (display.nextPage());
     
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Display shown on cold boot when in BLE configuration mode
@@ -302,6 +312,7 @@ void DisplayManager::displayBluetoothConfigMode(const char* appName) {
     } while (display.nextPage());
 
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Display low battery warning message
@@ -332,6 +343,7 @@ void DisplayManager::displayLowBatteryMessage() {
     } while (display.nextPage());
 
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Display config mismatch error
@@ -388,6 +400,7 @@ void DisplayManager::displayConfigMismatchError(const char* configApp, const cha
     } while (display.nextPage());
 
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Display function for text only (all black, no red header)
@@ -412,6 +425,7 @@ void DisplayManager::displayTextOnly(String text, int batteryPercent) {
     } while (display.nextPage());
 
     display.hibernate();
+    releaseDisplayPower();
 }
 
 // Default display function for general text
@@ -458,4 +472,5 @@ void DisplayManager::displayDefault(String text, int batteryPercent) {
     } while (display.nextPage());
     
     display.hibernate();
+    releaseDisplayPower();
 }

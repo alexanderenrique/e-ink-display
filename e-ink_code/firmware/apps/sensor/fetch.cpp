@@ -29,24 +29,21 @@ bool getSensorReadingsRaw(float& tempC, float& humidity) {
     }
     tempC = sht31.readTemperature();
     humidity = sht31.readHumidity();
-    if (isnan(tempC) || isnan(humidity)) return false;
+    if (isnan(tempC) || isnan(humidity)) {
+        Serial.println("[SensorApp] SHT31 read returned NaN values");
+        return false;
+    }
     return true;
 }
 
-String fetchSensorData(bool useCelsius, bool wifiConnected) {
-    float tempC, humidity;
-    if (!getSensorReadingsRaw(tempC, humidity)) {
-        return "Sensor Error\nRead failed";
-    }
-
+static String buildDisplayStringFromReadings(float tempC, float humidity, bool useCelsius, bool wifiConnected, String lastUpdatedTime) {
     float displayTemp = useCelsius ? tempC : (tempC * 9.0f / 5.0f + 32.0f);
     const char* unitStr = useCelsius ? "°C" : "°F";
 
     String result = String("Temperature & Humidity\n");
     result += String("Temp: ") + String(displayTemp, 1) + unitStr + "\n";
     result += String("Humidity: ") + String(humidity, 1) + "%";
-    
-    // Add WiFi info if connected
+
     if (wifiConnected && WiFi.status() == WL_CONNECTED) {
         int rssi = WiFi.RSSI();
         String strengthDesc;
@@ -64,18 +61,64 @@ String fetchSensorData(bool useCelsius, bool wifiConnected) {
             strengthDesc = "Very Poor";
         }
         result += String("\nWiFi: ") + String(rssi) + " dBm (" + strengthDesc + ")";
+        if (lastUpdatedTime.length() > 0) {
+            result += String("\nUpdated: ") + lastUpdatedTime;
+        } else {
+            result += String("\nUpdated: --");
+        }
     }
-    
+
     return result;
 }
 
-bool syncTimeFromNtp(const char* ntpServer, long gmtOffsetSec, int daylightOffsetSec) {
+String formatSensorDataForDisplay(float tempC, float humidity, bool useCelsius, bool wifiConnected, String lastUpdatedTime) {
+    return buildDisplayStringFromReadings(tempC, humidity, useCelsius, wifiConnected, lastUpdatedTime);
+}
+
+String fetchSensorData(bool useCelsius, bool wifiConnected, String lastUpdatedTime) {
+    float tempC, humidity;
+    if (!getSensorReadingsRaw(tempC, humidity)) {
+        return "Sensor Error\nRead failed";
+    }
+    return buildDisplayStringFromReadings(tempC, humidity, useCelsius, wifiConnected, lastUpdatedTime);
+}
+
+void setTimezoneRule(const char* tzRule) {
+    if (tzRule == nullptr || *tzRule == '\0') return;
+    setenv("TZ", tzRule, 1);
+    tzset();
+}
+
+String getLocalTimeForDisplay(const char* strftimeFormat) {
+    if (strftimeFormat == nullptr || *strftimeFormat == '\0') {
+        strftimeFormat = "%Y-%m-%d %H:%M";
+    }
+    time_t now = time(nullptr);
+    if (now <= 0) return String();
+    struct tm timeinfo;
+    if (!localtime_r(&now, &timeinfo)) return String();
+    char buf[48];
+    size_t n = strftime(buf, sizeof(buf), strftimeFormat, &timeinfo);
+    if (n == 0) return String();
+    return String(buf);
+}
+
+bool syncTimeFromNtp(const char* ntpServer) {
     if (ntpServer == nullptr || *ntpServer == '\0') return false;
-    configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
+    // Always sync in UTC; localtime() will use TZ rules for local display/DST.
+    configTime(0, 0, ntpServer);
     for (int i = 0; i < 50; i++) {
         time_t now = time(nullptr);
         if (now > 0) {
             Serial.println("[SensorApp] NTP time synced");
+            Serial.print("[SensorApp] NTP epoch: ");
+            Serial.println((long)now);
+            struct tm utc;
+            gmtime_r(&now, &utc);
+            char buf[40];
+            strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S UTC", &utc);
+            Serial.print("[SensorApp] NTP time (UTC): ");
+            Serial.println(buf);
             return true;
         }
         delay(100);
@@ -84,15 +127,31 @@ bool syncTimeFromNtp(const char* ntpServer, long gmtOffsetSec, int daylightOffse
     return false;
 }
 
-String getIso8601CreatedDate(const char* timeZoneOffset) {
-    if (timeZoneOffset == nullptr) timeZoneOffset = SENSOR_APP_DEFAULT_TIMEZONE_OFFSET;
+static String formatIso8601OffsetFromZ(const char* z) {
+    if (z == nullptr) return String();
+    // Expected forms: "+HHMM" or "-HHMM"
+    if (strlen(z) != 5) return String(z);
+    String out;
+    out.reserve(6);
+    out += z[0];
+    out += z[1];
+    out += z[2];
+    out += ":";
+    out += z[3];
+    out += z[4];
+    return out;
+}
+
+String getIso8601CreatedDate() {
     time_t now = time(nullptr);
     if (now <= 0) return String();
     struct tm timeinfo;
     if (!localtime_r(&now, &timeinfo)) return String();
-    char buf[32];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &timeinfo);
-    return String(buf) + ".000000" + timeZoneOffset;
+    char dt[32];
+    char z[8];
+    if (strftime(dt, sizeof(dt), "%Y-%m-%dT%H:%M:%S", &timeinfo) == 0) return String();
+    if (strftime(z, sizeof(z), "%z", &timeinfo) == 0) return String();
+    return String(dt) + ".000000" + formatIso8601OffsetFromZ(z);
 }
 
 bool postSensorDataToNemo(const char* url, const char* token,
@@ -135,13 +194,21 @@ bool postSensorDataToNemo(const char* url, const char* token,
             serializeJson(doc, body);
 
             int httpCode = http.POST(body);
+            String responseBody;
+            if (httpCode > 0) {
+                responseBody = http.getString();
+            }
 
             if (httpCode > 0 && httpCode < 300) {
                 Serial.printf("[SensorApp] Nemo POST (temp) OK: %d\n", httpCode);
             } else {
                 Serial.printf("[SensorApp] Nemo POST (temp) failed: %d %s\n", httpCode,
-                              httpCode > 0 ? http.getString().c_str() : http.errorToString(httpCode).c_str());
+                              httpCode > 0 ? responseBody.c_str() : http.errorToString(httpCode).c_str());
                 success = false;
+            }
+            if (httpCode > 0) {
+                Serial.print("[SensorApp] Nemo POST (temp) response body: ");
+                Serial.println(responseBody);
             }
             http.end();
         }
@@ -166,13 +233,21 @@ bool postSensorDataToNemo(const char* url, const char* token,
             serializeJson(doc, body);
 
             int httpCode = http.POST(body);
+            String responseBody;
+            if (httpCode > 0) {
+                responseBody = http.getString();
+            }
 
             if (httpCode > 0 && httpCode < 300) {
                 Serial.printf("[SensorApp] Nemo POST (humidity) OK: %d\n", httpCode);
             } else {
                 Serial.printf("[SensorApp] Nemo POST (humidity) failed: %d %s\n", httpCode,
-                              httpCode > 0 ? http.getString().c_str() : http.errorToString(httpCode).c_str());
+                              httpCode > 0 ? responseBody.c_str() : http.errorToString(httpCode).c_str());
                 success = false;
+            }
+            if (httpCode > 0) {
+                Serial.print("[SensorApp] Nemo POST (humidity) response body: ");
+                Serial.println(responseBody);
             }
             http.end();
         }

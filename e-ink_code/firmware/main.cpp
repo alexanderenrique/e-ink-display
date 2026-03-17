@@ -26,6 +26,7 @@
 #include "apps/messages/app.h"
 #endif
 #include "esp_sleep.h"
+#include "esp_system.h"
 #include "hardware_config.h"
 
 // Core managers
@@ -78,10 +79,23 @@ const char* TEST_CONFIG_JSON =
 
 void setup() {
     Serial.begin(115200);
+    
+    // Ensure display + sensor rail is OFF immediately on boot.
+    // With an added MOSFET, leaving the gate floating can cause inrush/brownouts
+    // that prevent BLE from reliably starting on initial power-up.
+    pinMode(POWER_DISPLAY_SENSOR_PIN, OUTPUT);
+    digitalWrite(POWER_DISPLAY_SENSOR_PIN, HIGH); // HIGH = power off (see hardware_config.h)
+
+    uint32_t bootStartMs = millis();
     delay(1000);
     
     // Print wake reason
     esp_sleep_wakeup_cause_t wakeup_reason = powerManager.getWakeupCause();
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    Serial.println();
+    Serial.println("========== BOOT ==========");
+    Serial.print("[Main] millis: ");
+    Serial.println(millis());
     switch(wakeup_reason) {
         case ESP_SLEEP_WAKEUP_EXT0: Serial.println("Wakeup caused by external signal using RTC_IO"); break;
         case ESP_SLEEP_WAKEUP_EXT1: Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
@@ -90,13 +104,24 @@ void setup() {
         case ESP_SLEEP_WAKEUP_ULP: Serial.println("Wakeup caused by ULP program"); break;
         default: Serial.println("Wakeup was not caused by deep sleep"); break;
     }
+    Serial.print("[Main] Reset reason: ");
+    Serial.println((int)reset_reason);
+    Serial.print("[Main] Free heap: ");
+    Serial.println(ESP.getFreeHeap());
+    Serial.print("[Main] Display rail pin (");
+    Serial.print(POWER_DISPLAY_SENSOR_PIN);
+    Serial.print(") state: ");
+    Serial.println(digitalRead(POWER_DISPLAY_SENSOR_PIN));
 
     // Check battery level on wakeup
     // If we woke from timer (likely from low battery sleep), check if battery has recovered
     int batteryPercent = powerManager.getBatteryPercentage();
+    float batteryVoltage = powerManager.getBatteryVoltage();
     Serial.print("[Main] Battery level: ");
     Serial.print(batteryPercent);
     Serial.println("%");
+    Serial.print("[Main] Battery voltage: ");
+    Serial.println(batteryVoltage, 3);
     
     if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
         // We woke from timer - could be from low battery sleep or normal sleep
@@ -125,15 +150,30 @@ void setup() {
         return;
     }
 
-    // On cold start only (not wake from deep sleep), enable BLE for 60s or until connected
-    coldStartBle.begin(wakeup_reason);
+    // Decide whether we will run BLE on this boot, and consume skipBLE flag once.
+    bool skipBle = ColdStartBle::shouldSkipBle();
+    bool willRunBle = (!skipBle && reset_reason != ESP_RST_DEEPSLEEP);
+    Serial.print("[Main] willRunBle: ");
+    Serial.println(willRunBle ? "TRUE" : "FALSE");
 
-    // When in BLE config mode, show config screen on display
-    // Always show the actual firmware app installed, not the config app
-    if (coldStartBle.isActive()) {
+    // Per your request: show the Bluetooth config screen first, wait ~10s, then start BLE.
+    if (willRunBle) {
+        Serial.print("[Main] Showing BLE screen at ms=");
+        Serial.println(millis());
         displayManager.begin();
         displayManager.displayBluetoothConfigMode(DEFAULT_APP_NAME);
+        displayManager.disableSPI();
+        Serial.print("[Main] BLE screen done, SPI disabled at ms=");
+        Serial.println(millis());
+
+        Serial.println("[Main] Waiting 1s before BLE init...");
+        delay(1000);
+        Serial.print("[Main] Starting BLE at ms=");
+        Serial.println(millis());
     }
+
+    // Start BLE (if eligible). This call is safe when willRunBle is false (it will return early).
+    coldStartBle.begin(wakeup_reason, reset_reason, skipBle);
 
     // Initialize app manager with core managers
     appManager.setWiFiManager(&wifiManager);
@@ -235,10 +275,13 @@ void setup() {
             } else if (storedDoc.containsKey("time_server")) {
                 config["timeServer"] = storedDoc["time_server"];
             }
-            if (storedDoc.containsKey("timeZoneOffset")) {
-                config["timeZoneOffset"] = storedDoc["timeZoneOffset"];
-            } else if (storedDoc.containsKey("time_zone_offset")) {
-                config["timeZoneOffset"] = storedDoc["time_zone_offset"];
+            // Timezone selection for DST-aware local time (preferred)
+            if (storedDoc.containsKey("timeZone")) {
+                config["timeZone"] = storedDoc["timeZone"];
+            } else if (storedDoc.containsKey("timezone")) {
+                config["timeZone"] = storedDoc["timezone"];
+            } else if (storedDoc.containsKey("time_zone")) {
+                config["timeZone"] = storedDoc["time_zone"];
             }
             if (storedDoc.containsKey("gmtOffsetSec")) {
                 config["gmtOffsetSec"] = storedDoc["gmtOffsetSec"];
@@ -329,10 +372,14 @@ void setup() {
     
     // Begin the active app
     appManager.begin();
+
+    Serial.print("[Main] setup() complete in ms=");
+    Serial.println((uint32_t)(millis() - bootStartMs));
+    Serial.println("==========================");
 }
 
 void loop() {
-    // Cold-start BLE: disable after 2 minutes or first connection
+    // Cold-start BLE: disable after 15 seconds or first connection
     coldStartBle.loop();
 
     // Check battery level before running app

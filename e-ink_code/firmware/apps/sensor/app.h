@@ -37,7 +37,9 @@ private:
     String _timeServer = SENSOR_APP_DEFAULT_TIME_SERVER;
     long _gmtOffsetSec = SENSOR_APP_DEFAULT_GMT_OFFSET_SEC;
     int _daylightOffsetSec = SENSOR_APP_DEFAULT_DAYLIGHT_OFFSET_SEC;
-    String _timeZoneOffset = SENSOR_APP_DEFAULT_TIMEZONE_OFFSET;
+    // New approach: select timezone + apply TZ rule locally for DST-aware localtime().
+    String _timeZone = SENSOR_APP_DEFAULT_TIMEZONE;
+    String _tzRule = SENSOR_APP_DEFAULT_TZ_RULE;
 
     // Display: header line shown in red (e.g. "Gowning Room")
     String _sensorLocation;

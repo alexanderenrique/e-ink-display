@@ -34,6 +34,7 @@ public:
     void disableSPI();
 
 private:
+    void releaseDisplayPower();  // Set POWER_DISPLAY_SENSOR_PIN HIGH (power off)
     bool _initialized;
 };
 

@@ -3,25 +3,31 @@
 
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
 
 /**
  * Enables Bluetooth for a short window only on cold start (power-on reset).
  * Does nothing when waking from deep sleep (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED).
  *
- * BLE stays on for up to COLD_START_BLE_WINDOW_SECONDS (3 min), or until config is received (then device restarts).
+ * BLE stays on for up to COLD_START_BLE_WINDOW_SECONDS (15 s), or until config is received (then device restarts).
  * When a central connects, BLE remains active so it can discover services and send config.
  */
 class ColdStartBle {
 public:
-    static const uint32_t COLD_START_BLE_WINDOW_SECONDS = 180;  // 3 minutes
+    static const uint32_t COLD_START_BLE_WINDOW_SECONDS = 15;  // 15 seconds
 
     ColdStartBle();
 
     /**
-     * Call from setup(). If wakeup_cause is ESP_SLEEP_WAKEUP_UNDEFINED (cold boot),
-     * initializes BLE and starts advertising. Otherwise does nothing.
+     * Call from setup().
+     *
+     * Enables BLE on true cold starts:
+     * - Deep-sleep wakeup cause is ESP_SLEEP_WAKEUP_UNDEFINED, OR
+     * - Reset reason indicates power-on/brownout.
+     *
+     * Otherwise (e.g., deep sleep timer wake) does nothing.
      */
-    void begin(esp_sleep_wakeup_cause_t wakeup_cause);
+    void begin(esp_sleep_wakeup_cause_t wakeup_cause, esp_reset_reason_t reset_reason, bool skip_ble);
 
     /**
      * Call from loop(). When active, checks whether the window elapsed or a device connected;

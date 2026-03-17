@@ -351,6 +351,7 @@ Configuration is sent as JSON via the TX characteristic. Example:
 - `wifiSSID`: WiFi network name (stored in Preferences)
 - `wifiPassword`: WiFi password (stored in Preferences)
 - `refreshInterval`: Display refresh interval in minutes
+- `timeZone`: (sensor app) Timezone selection for DST-aware local time. Supported: "pacific", "mountain", "central", "eastern", "arizona", "utc"
 - `timestamp`: Configuration timestamp
 - `apis`: Nested object containing API-specific configuration
 
