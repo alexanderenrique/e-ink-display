@@ -73,6 +73,16 @@ bool SensorApp::configure(const JsonObject& config) {
         Serial.println(_humiditySensorId);
     }
 
+    if (config.containsKey("batterySensorId")) {
+        _batterySensorId = config["batterySensorId"].as<const char*>();
+    } else if (config.containsKey("battery_sensor_id")) {
+        _batterySensorId = config["battery_sensor_id"].as<const char*>();
+    }
+    if (_batterySensorId.length() > 0) {
+        Serial.print("[SensorApp] Battery Sensor ID: ");
+        Serial.println(_batterySensorId);
+    }
+
     if (config.containsKey("sensorLocation")) {
         _sensorLocation = config["sensorLocation"].as<const char*>();
     } else if (config.containsKey("sensor_location")) {
@@ -169,11 +179,12 @@ void SensorApp::loop() {
         }
     }
 
-    // Single I2C read: use for both display and Nemo. Second read after display/SPI disable often fails (I2C -1).
+    // Average multiple I2C reads once, then reuse for display and Nemo.
+    // Second read after display/SPI disable often fails (I2C -1), so keep a single acquisition phase.
     bool useCelsius = (_units == "C");
     float tempC = 0.0f;
     float humidity = 0.0f;
-    bool readOk = getSensorReadingsRaw(tempC, humidity);
+    bool readOk = getAveragedSensorReadings(tempC, humidity, 5);
     String sensorData = readOk
         ? formatSensorDataForDisplay(tempC, humidity, useCelsius, wifiConnected, lastUpdatedTime)
         : "Sensor Error\nRead failed";
@@ -207,8 +218,8 @@ void SensorApp::loop() {
                 if (createdDate.length() > 0) {
                     Serial.println("[SensorApp] Nemo POST: calling postSensorDataToNemo");
                     postSensorDataToNemo(_nemoUrl.c_str(), _nemoToken.c_str(),
-                                        _temperatureSensorId.c_str(), _humiditySensorId.c_str(),
-                                        tempC, humidity, createdDate.c_str());
+                                        _temperatureSensorId.c_str(), _humiditySensorId.c_str(), _batterySensorId.c_str(),
+                                        tempC, humidity, batteryPercent, createdDate.c_str());
                 } else {
                     Serial.println("[SensorApp] Nemo POST skipped: could not get time for created_date");
                 }

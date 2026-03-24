@@ -257,6 +257,11 @@ void setup() {
             } else if (storedDoc.containsKey("humidity_sensor_id")) {
                 config["humiditySensorId"] = storedDoc["humidity_sensor_id"];
             }
+            if (storedDoc.containsKey("batterySensorId")) {
+                config["batterySensorId"] = storedDoc["batterySensorId"];
+            } else if (storedDoc.containsKey("battery_sensor_id")) {
+                config["batterySensorId"] = storedDoc["battery_sensor_id"];
+            }
             // Legacy support for single sensorId (for backwards compatibility)
             if (storedDoc.containsKey("sensorId") && !config.containsKey("temperatureSensorId")) {
                 config["temperatureSensorId"] = storedDoc["sensorId"];

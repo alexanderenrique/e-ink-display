@@ -32,6 +32,7 @@ private:
     String _nemoUrl = SENSOR_APP_DEFAULT_NEMO_URL;
     String _temperatureSensorId;
     String _humiditySensorId;
+    String _batterySensorId;
 
     // Time sync for Nemo created_date (NTP server and timezone)
     String _timeServer = SENSOR_APP_DEFAULT_TIME_SERVER;

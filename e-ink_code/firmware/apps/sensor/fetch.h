@@ -18,6 +18,10 @@ String formatSensorDataForDisplay(float tempC, float humidity, bool useCelsius, 
 // Raw readings in Celsius (for Nemo API). Returns true if read succeeded.
 bool getSensorReadingsRaw(float& tempC, float& humidity);
 
+// Read sensor multiple times and return averaged values in Celsius/%RH.
+// Returns true if at least one reading succeeded.
+bool getAveragedSensorReadings(float& avgTempC, float& avgHumidity, uint8_t sampleCount = 5);
+
 // Sync system time from NTP. Call when WiFi is connected. Returns true when time is set.
 bool syncTimeFromNtp(const char* ntpServer);
 
@@ -34,7 +38,7 @@ String getIso8601CreatedDate();
 // POST sensor data to Nemo API. Uses WiFi (must be connected). Returns true on HTTP 2xx.
 // Payload: sensor (id), value, created_date (ISO 8601). Pass from getIso8601CreatedDate() after syncTimeFromNtp().
 bool postSensorDataToNemo(const char* url, const char* token,
-                          const char* temperatureSensorId, const char* humiditySensorId,
-                          float tempC, float humidity, const char* createdDate);
+                          const char* temperatureSensorId, const char* humiditySensorId, const char* batterySensorId,
+                          float tempC, float humidity, int batteryPercent, const char* createdDate);
 
 #endif // SENSOR_APP_FETCH_H

@@ -6,10 +6,41 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <Preferences.h>
 #include <time.h>
 
 static Adafruit_SHT31 sht31 = Adafruit_SHT31();
 static bool sht31Ready = false;
+
+static String getDateKeyFromCreatedDate(const char* createdDate) {
+    // Expected: "YYYY-MM-DDTHH:MM:SS.000000+HH:MM"
+    if (createdDate == nullptr) return String();
+    if (strlen(createdDate) < 10) return String();
+    return String(createdDate).substring(0, 10);
+}
+
+static bool hasPostedBatteryForDate(const String& dateKey) {
+    if (dateKey.length() == 0) return false;
+    Preferences prefs;
+    if (!prefs.begin("sensor_app", true)) {
+        Serial.println("[SensorApp] Preferences read open failed for battery post date");
+        return false;
+    }
+    String lastDate = prefs.getString("batt_post_date", "");
+    prefs.end();
+    return lastDate == dateKey;
+}
+
+static void setPostedBatteryDate(const String& dateKey) {
+    if (dateKey.length() == 0) return;
+    Preferences prefs;
+    if (!prefs.begin("sensor_app", false)) {
+        Serial.println("[SensorApp] Preferences write open failed for battery post date");
+        return;
+    }
+    prefs.putString("batt_post_date", dateKey);
+    prefs.end();
+}
 
 bool initSensor() {
     Wire.begin(I2C_SDA, I2C_SCL);
@@ -33,6 +64,42 @@ bool getSensorReadingsRaw(float& tempC, float& humidity) {
         Serial.println("[SensorApp] SHT31 read returned NaN values");
         return false;
     }
+    return true;
+}
+
+bool getAveragedSensorReadings(float& avgTempC, float& avgHumidity, uint8_t sampleCount) {
+    if (sampleCount == 0) return false;
+
+    float tempSum = 0.0f;
+    float humiditySum = 0.0f;
+    uint8_t validSamples = 0;
+
+    for (uint8_t i = 0; i < sampleCount; ++i) {
+        float tempC = 0.0f;
+        float humidity = 0.0f;
+        if (getSensorReadingsRaw(tempC, humidity)) {
+            tempSum += tempC;
+            humiditySum += humidity;
+            ++validSamples;
+        } else {
+            Serial.printf("[SensorApp] Sensor sample %u/%u failed\n", i + 1, sampleCount);
+        }
+
+        // Small gap between sensor samples to avoid back-to-back reads.
+        if (i + 1 < sampleCount) {
+            delay(100);
+        }
+    }
+
+    if (validSamples == 0) {
+        Serial.println("[SensorApp] Averaging failed: no valid sensor samples");
+        return false;
+    }
+
+    avgTempC = tempSum / validSamples;
+    avgHumidity = humiditySum / validSamples;
+    Serial.printf("[SensorApp] Averaged %u/%u samples: %.2f C, %.2f %%RH\n",
+                  validSamples, sampleCount, avgTempC, avgHumidity);
     return true;
 }
 
@@ -155,8 +222,8 @@ String getIso8601CreatedDate() {
 }
 
 bool postSensorDataToNemo(const char* url, const char* token,
-                          const char* temperatureSensorId, const char* humiditySensorId,
-                          float tempC, float humidity, const char* createdDate) {
+                          const char* temperatureSensorId, const char* humiditySensorId, const char* batterySensorId,
+                          float tempC, float humidity, int batteryPercent, const char* createdDate) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[SensorApp] Nemo POST skipped: WiFi not connected");
         return false;
@@ -250,6 +317,56 @@ bool postSensorDataToNemo(const char* url, const char* token,
                 Serial.println(responseBody);
             }
             http.end();
+        }
+    }
+
+    // POST battery reading if sensor ID is provided and battery reading is valid
+    if (batterySensorId != nullptr && *batterySensorId != '\0') {
+        if (batteryPercent < 0) {
+            Serial.println("[SensorApp] Nemo POST (battery) skipped: invalid battery reading");
+        } else {
+            String batteryDateKey = getDateKeyFromCreatedDate(createdDate);
+            if (hasPostedBatteryForDate(batteryDateKey)) {
+                Serial.print("[SensorApp] Nemo POST (battery) skipped: already posted for ");
+                Serial.println(batteryDateKey);
+            } else {
+                HTTPClient http;
+                if (!http.begin(client, url)) {
+                    Serial.println("[SensorApp] Nemo POST (battery): http.begin failed");
+                    success = false;
+                } else {
+                    http.addHeader("Content-Type", "application/json");
+                    http.addHeader("Authorization", String("Token ") + token);
+
+                    DynamicJsonDocument doc(256);
+                    doc["sensor"] = atoi(batterySensorId);  // Convert string to int
+                    doc["value"] = batteryPercent;
+                    doc["created_date"] = createdDate;
+
+                    String body;
+                    serializeJson(doc, body);
+
+                    int httpCode = http.POST(body);
+                    String responseBody;
+                    if (httpCode > 0) {
+                        responseBody = http.getString();
+                    }
+
+                    if (httpCode > 0 && httpCode < 300) {
+                        Serial.printf("[SensorApp] Nemo POST (battery) OK: %d\n", httpCode);
+                        setPostedBatteryDate(batteryDateKey);
+                    } else {
+                        Serial.printf("[SensorApp] Nemo POST (battery) failed: %d %s\n", httpCode,
+                                      httpCode > 0 ? responseBody.c_str() : http.errorToString(httpCode).c_str());
+                        success = false;
+                    }
+                    if (httpCode > 0) {
+                        Serial.print("[SensorApp] Nemo POST (battery) response body: ");
+                        Serial.println(responseBody);
+                    }
+                    http.end();
+                }
+            }
         }
     }
 
