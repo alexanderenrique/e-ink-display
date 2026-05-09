@@ -1,0 +1,19 @@
+# Licensing
+
+This repository mixes hardware design files and software. Different licenses apply
+to different parts of the tree, as described below.
+
+| Area | License | Full text |
+|------|---------|-----------|
+| KiCad projects, Gerbers, and PCB-related exports under `e-ink-PCBs/` | [CERN-OHL-W-2.0](https://opensource.org/license/cern-ohl-w) | [LICENSE-HARDWARE](LICENSE-HARDWARE) |
+| Firmware under `e-ink_code/firmware/`, Python and shell scripts under `e-ink_code/scripts/`, configuration examples under `e-ink_code/config/`, and Markdown documentation at the repository root and under `e-ink_code/` | [MIT](https://opensource.org/license/mit) | [LICENSE-SOFTWARE](LICENSE-SOFTWARE) |
+
+Unless a file or subdirectory states otherwise, the paths above determine which
+license applies. Third-party components (for example KiCad library symbols,
+footprints, or PlatformIO libraries) remain under their respective upstream
+licenses.
+
+SPDX identifiers used in this project:
+
+- `CERN-OHL-W-2.0` for hardware design source in `e-ink-PCBs/`
+- `MIT` for software and documentation described in the table above

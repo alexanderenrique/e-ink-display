@@ -1,0 +1,12 @@
+Reference,Value,Suggested_MPN_or_part,Description,Footprint_notes
+J1,SEED C3,Seeed Studio XIAO ESP32-C3,ESP32-C3 module,Through-hole XIAO footprint variant
+J2,e-ink-display,GDEM029C90 (or vendor equivalent),E-paper panel,8p 2.54mm header
+J3,SHT31,Adafruit 2857 / SHT31,I2C sensor,1x4 2.54mm socket
+C2,C_Small_US,,RTC crystal load / bypass (value per crystal datasheet),
+C3,C_Small_US,,RTC crystal load / bypass (value per crystal datasheet),
+BT1,Battery_Cell,,RTC backup cell (symbolic),Use non-rechargeable cell appropriate for MCP7940N VBAT per datasheet
+R3,R_Small_US,,Pull-up or bias (confirm value in schematic),
+Q1,FQP27P06,ON Semi FQP27P06,P-channel MOSFET power switch,
+Q2,ZXMP4A16G,Diodes Inc. ZXMP4A16G,P-channel MOSFET SOT-223,
+TOP_47K,R_Small_US,47 kΩ,Battery divider top,
+BTTM_68K,R_Small_US,68 kΩ,Battery divider bottom,

@@ -536,4 +536,6 @@ Potential improvements to the architecture:
 
 ## License
 
-[Add your license information here]
+Firmware in this directory is licensed under the MIT License. See
+[`LICENSE-SOFTWARE`](../../LICENSE-SOFTWARE) and the overview in
+[`LICENSE`](../../LICENSE).

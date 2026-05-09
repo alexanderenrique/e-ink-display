@@ -7,3 +7,7 @@ venv/
 secure_boot_signing_key.pem
 *.pem
 .env
+
+# Local / internal docs (not distributed)
+FLASH_INSTRUCTIONS.md
+PLATFORMIO_CLI_CHEATSHEET.md

@@ -1,0 +1,30 @@
+# Basic display BOM (no RTC)
+
+| Reference | Value | Suggested MPN / part | Description | Footprint notes | Qty | US$ @ 1 ea | US$ line @ 1 | US$ @ 10 ea | US$ line @ 10 | US$ @ 100 ea | US$ line @ 100 | Notes | Link |
+| --- | --- | --- | --- | --- | ---:| ---:| ---:| ---:| ---:| ---:| ---:| --- | --- |
+| J2 | e-ink display |  |  |  | 1 | $9.00000 | $9.00000 | $8.00000 | $8.00000 | $8.00000 | $8.00000 | Hard to find the exact one | [AliExpress][j2-link] |
+| J1 | Seeed-ESP32 C3 |  | MCU |  | 1 | $4.90000 | $4.90000 | $4.20000 | $4.20000 | $4.20000 | $4.20000 |  |  |
+| ANT1 | u.fl Antenna |  | Wifi Antenna |  | 1 | $0.50000 | $0.50000 | $0.50000 | $0.50000 | $0.50000 | $0.50000 |  |  |
+| J3 | SHT31 | SHT-31D |  |  | 1 | $2.30000 | $2.30000 | $1.50000 | $1.50000 | $1.00000 | $1.00000 | Many kind of SHT sensors, using SHT-31D, easy to find on amazon |  |
+| 47k1 | 47 kΩ | MFR50SFTE52-47K | Throughole, 0.5W, metal film |  | 1 | $0.10000 | $0.10000 | $0.04800 | $0.04800 | $0.03070 | $0.03070 | Top of Voltage Divider |  |
+| 68k1 | 68 kΩ | MF0207FTE52-68K | Throughole, 0.5W, metal film |  | 1 | $0.10000 | $0.10000 | $0.05000 | $0.05000 | $0.03280 | $0.03280 | Bottom of Voltage divider |  |
+| 1M1 | 1 MΩ | MFR-25FTE52-1M | Throughole, 0.5W, metal film |  | 1 | $0.10000 | $0.10000 | $0.03700 | $0.03700 | $0.02400 | $0.02400 | Pull up for MOSFET; placement 1 of 2 from original qty-2 line. |  |
+| 1M2 | 1 MΩ | MFR-25FTE52-1M | Throughole, 0.5W, metal film |  | 1 | $0.10000 | $0.10000 | $0.03700 | $0.03700 | $0.02400 | $0.02400 | Pull up for MOSFET; placement 2 of 2 from original qty-2 line. |  |
+| Q1 | P-Type MOSFET | BSP92PH6327XTSA1 | SMD, SOT-223-4 |  | 1 | $0.93000 | $0.93000 | $0.58000 | $0.58000 | $0.37000 | $0.37000 | P-Channel 250 V 260mA (Ta) 1.8W (Ta) Surface Mount PG-SOT223-4; placement 1 of 2 from original qty-2 BOM line. |  |
+| Q2 | P-Type MOSFET | BSP92PH6327XTSA1 | SMD, SOT-223-4 |  | 1 | $0.93000 | $0.93000 | $0.58000 | $0.58000 | $0.37000 | $0.37000 | P-Channel 250 V 260mA (Ta) 1.8W (Ta) Surface Mount PG-SOT223-4; placement 2 of 2 from original qty-2 BOM line. |  |
+| C1 | 10 µF | FG18X5R1E106MRT06 |  |  | 1 | $0.04500 | $0.04500 | $0.27300 | $0.27300 | $0.18190 | $0.18190 | Power Entry Cap |  |
+| C2 | 0.1 µF | K104K15X7RF5TL2 | Throughole, Ceramic |  | 1 | $0.26000 | $0.26000 | $0.14900 | $0.14900 | $0.09480 | $0.09480 | One for each power pin; placement 1 of 2 from original qty-2 line. |  |
+| C3 | 0.1 µF | K104K15X7RF5TL2 | Throughole, Ceramic |  | 1 | $0.26000 | $0.26000 | $0.14900 | $0.14900 | $0.09480 | $0.09480 | One for each power pin; placement 2 of 2 from original qty-2 line. |  |
+| C4 | 10 pF | K100J15C0GF53L2 | Throughole, Ceramic |  | 1 | $0.24000 | $0.24000 | $0.14000 | $0.14000 | $0.08900 | $0.08900 | For oscillator; placement 1 of 2 from original qty-2 line. |  |
+| C5 | 10 pF | K100J15C0GF53L2 | Throughole, Ceramic |  | 1 | $0.24000 | $0.24000 | $0.14000 | $0.14000 | $0.08900 | $0.08900 | For oscillator; placement 2 of 2 from original qty-2 line. |  |
+| TOTALS |  |  | BOM cost rollup (all lines summed at each price breakpoint) |  |  |  | **$20.00500** |  | **$16.38300** |  | **$15.10100** | Carried forward from original CSV columns Cost/single/unit ($20.005), Cost/10/unit ($16.383), cost/100/unit ($15.101). |  |
+
+## Rolled-up BOM cost (from sheet)
+
+| Breakpoint | Total (all lines) |
+| --- | ---: |
+| Buy as ones (matches `Cost_Single_line_total` sum) | $20.00500 |
+| Buy at 10-unit pricing | $16.38300 |
+| Buy at 100-unit pricing | $15.10100 |
+
+[j2-link]: https://www.aliexpress.us/item/3256808057925649.html?spm=a2g0o.detail.similar_items.3.715aG7SWG7SWJn&utparam-url=scene%3Aimage_search%7Cquery_from%3Aapp_pdp_sold_out%7Cx_object_id%3A1005008244240401%7C_p_origin_prod%3A&algo_pvid=7b7d9962-9aa5-4605-a7d7-358a58432ed6&algo_exp_id=7b7d9962-9aa5-4605-a7d7-358a58432ed6&pdp_ext_f=%7B%22order%22%3A%2262%22%2C%22fromPage%22%3A%22search%22%7D&pdp_npi=6%40dis%21USD%217.68%217.68%21%21%2152.76%2152.76%21%402101eecd17729252750646162e0511%2112000044354333709%21sea%21US%210%21ABX%211%210%21n_tag%3A-29910%3Bd%3Acf907b20%3Bm03_new_user%3A-29895&gatewayAdapt=4itemAdapt

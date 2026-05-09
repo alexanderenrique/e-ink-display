@@ -1,0 +1,11 @@
+Reference,Value,Suggested_MPN_or_part,Description,Footprint_notes
+J1,SEED C3,Seeed Studio XIAO ESP32-C3,ESP32-C3 module Wi-Fi/BLE,Use official XIAO ESP32-C3; match project footprint Module:XIAO-ESP32C3-SMD_alex
+J2,e-ink-display,GDEM029C90 (or vendor equivalent),2.9in 128x296 B/W/R e-paper + flex tail,Install per panel vendor drawing; aligns to 8p 2.54mm header on PCB
+J3,SHT31,Adafruit 2857 / Sensirion SHT31 breakout or bare IC,Temperature & humidity I2C sensor,Symbol is 4-pin 2.54mm socket
+J4,100 uF CAP,,Electrolytic bulk decoupling near supply,Radial 8mm pitch per schematic; verify voltage rating for your battery max
+J5,Batt Conn,,2-pin LiPo / battery input,2.00mm pitch 1x2 socket per footprint
+C1,C_Small_US,,Ceramic decoupling (populate value per your design—e.g. 100nF),Disc cap footprint in schematic
+R1,R_Small_US,47 kΩ ±5% 1/4W,Battery divider top (to GPIO ADC),Match firmware divider math in software docs
+R2,R_Small_US,68 kΩ ±5% 1/4W,Battery divider bottom,Pair with R1 for expected ratio
+R3,R_Small_US,,Pull-up / bias (set value per schematic trace—verify in KiCad),Axial THT in schematic
+Q1,FQP27P06,ON Semi FQP27P06,P-channel power switch,Schematic shows TO-220 footprint; confirm against PCB copper
