@@ -1,4 +1,5 @@
 #include "fetch.h"
+#include "iss_geo_lookup.h"
 #include "config.h"
 #include <Wire.h>
 #include <Adafruit_SHT31.h>
@@ -247,9 +248,8 @@ String getISSData() {
             float altitude_miles = altitude_km * 0.621371;
             float velocity_mph = velocity_kph * 0.621371;
             
-            // Format: "Where is the ISS?\nLat, Long\nAlt KM / Miles\nVel KPH / MPH"
             result = String("Where is the ISS?\n");
-            result += String("Lat/Long: ") + String(latitude, 2) + ", " + String(longitude, 2) + "\n";
+            result += describeNearestPlace(latitude, longitude) + "\n";
             result += String("Altitude: ") + String(altitude_miles, 2) + " mi\n";
             result += String("Velocity: ") + String(velocity_mph, 2) + " mph\n";
 
