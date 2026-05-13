@@ -1,0 +1,672 @@
+[
+{
+"lat": 40.71,
+"lon": -74.01,
+"label": "New York, USA"
+},
+{
+"lat": 34.05,
+"lon": -118.24,
+"label": "Los Angeles, USA"
+},
+{
+"lat": 41.88,
+"lon": -87.63,
+"label": "Chicago, USA"
+},
+{
+"lat": 29.76,
+"lon": -95.37,
+"label": "Houston, USA"
+},
+{
+"lat": 25.76,
+"lon": -80.19,
+"label": "Miami, USA"
+},
+{
+"lat": 47.61,
+"lon": -122.33,
+"label": "Seattle, USA"
+},
+{
+"lat": 33.45,
+"lon": -112.07,
+"label": "Phoenix, USA"
+},
+{
+"lat": 39.74,
+"lon": -104.99,
+"label": "Denver, USA"
+},
+{
+"lat": 32.78,
+"lon": -96.8,
+"label": "Dallas, USA"
+},
+{
+"lat": 33.75,
+"lon": -84.39,
+"label": "Atlanta, USA"
+},
+{
+"lat": 42.36,
+"lon": -71.06,
+"label": "Boston, USA"
+},
+{
+"lat": 37.77,
+"lon": -122.42,
+"label": "San Francisco, USA"
+},
+{
+"lat": 36.17,
+"lon": -115.14,
+"label": "Las Vegas, USA"
+},
+{
+"lat": 45.52,
+"lon": -122.68,
+"label": "Portland, USA"
+},
+{
+"lat": 40.76,
+"lon": -111.89,
+"label": "Salt Lake City, USA"
+},
+{
+"lat": 44.98,
+"lon": -93.27,
+"label": "Minneapolis, USA"
+},
+{
+"lat": 42.33,
+"lon": -83.05,
+"label": "Detroit, USA"
+},
+{
+"lat": 39.95,
+"lon": -75.17,
+"label": "Philadelphia, USA"
+},
+{
+"lat": 38.63,
+"lon": -90.2,
+"label": "St Louis, USA"
+},
+{
+"lat": 39.1,
+"lon": -94.58,
+"label": "Kansas City, USA"
+},
+{
+"lat": 35.23,
+"lon": -80.84,
+"label": "Charlotte, USA"
+},
+{
+"lat": 61.22,
+"lon": -149.9,
+"label": "Anchorage, USA"
+},
+{
+"lat": 21.31,
+"lon": -157.86,
+"label": "Honolulu, USA"
+},
+{
+"lat": 19.43,
+"lon": -99.13,
+"label": "Mexico City, Mexico"
+},
+{
+"lat": 14.63,
+"lon": -90.51,
+"label": "Guatemala City, Guatemala"
+},
+{
+"lat": 43.65,
+"lon": -79.38,
+"label": "Toronto, Canada"
+},
+{
+"lat": 49.28,
+"lon": -123.12,
+"label": "Vancouver, Canada"
+},
+{
+"lat": 45.5,
+"lon": -73.57,
+"label": "Montreal, Canada"
+},
+{
+"lat": 51.04,
+"lon": -114.07,
+"label": "Calgary, Canada"
+},
+{
+"lat": 53.55,
+"lon": -113.49,
+"label": "Edmonton, Canada"
+},
+{
+"lat": 23.13,
+"lon": -82.37,
+"label": "Havana, Cuba"
+},
+{
+"lat": 8.98,
+"lon": -79.52,
+"label": "Panama City, Panama"
+},
+{
+"lat": 4.71,
+"lon": -74.07,
+"label": "Bogota, Colombia"
+},
+{
+"lat": 6.25,
+"lon": -75.56,
+"label": "Medellin, Colombia"
+},
+{
+"lat": -12.05,
+"lon": -77.04,
+"label": "Lima, Peru"
+},
+{
+"lat": -0.18,
+"lon": -78.47,
+"label": "Quito, Ecuador"
+},
+{
+"lat": -33.45,
+"lon": -70.67,
+"label": "Santiago, Chile"
+},
+{
+"lat": -16.5,
+"lon": -68.15,
+"label": "La Paz, Bolivia"
+},
+{
+"lat": -34.6,
+"lon": -58.38,
+"label": "Buenos Aires, Argentina"
+},
+{
+"lat": -34.9,
+"lon": -56.17,
+"label": "Montevideo, Uruguay"
+},
+{
+"lat": -23.55,
+"lon": -46.63,
+"label": "Sao Paulo, Brazil"
+},
+{
+"lat": -22.91,
+"lon": -43.17,
+"label": "Rio de Janeiro, Brazil"
+},
+{
+"lat": 10.48,
+"lon": -66.9,
+"label": "Caracas, Venezuela"
+},
+{
+"lat": 51.51,
+"lon": -0.13,
+"label": "London, UK"
+},
+{
+"lat": 53.48,
+"lon": -2.24,
+"label": "Manchester, UK"
+},
+{
+"lat": 48.86,
+"lon": 2.35,
+"label": "Paris, France"
+},
+{
+"lat": 40.42,
+"lon": -3.7,
+"label": "Madrid, Spain"
+},
+{
+"lat": 41.39,
+"lon": 2.15,
+"label": "Barcelona, Spain"
+},
+{
+"lat": 52.52,
+"lon": 13.41,
+"label": "Berlin, Germany"
+},
+{
+"lat": 48.14,
+"lon": 11.58,
+"label": "Munich, Germany"
+},
+{
+"lat": 52.37,
+"lon": 4.9,
+"label": "Amsterdam, Netherlands"
+},
+{
+"lat": 55.68,
+"lon": 12.57,
+"label": "Copenhagen, Denmark"
+},
+{
+"lat": 41.9,
+"lon": 12.48,
+"label": "Rome, Italy"
+},
+{
+"lat": 45.46,
+"lon": 9.19,
+"label": "Milan, Italy"
+},
+{
+"lat": 48.21,
+"lon": 16.37,
+"label": "Vienna, Austria"
+},
+{
+"lat": 52.23,
+"lon": 21.01,
+"label": "Warsaw, Poland"
+},
+{
+"lat": 50.08,
+"lon": 14.44,
+"label": "Prague, Czechia"
+},
+{
+"lat": 47.5,
+"lon": 19.04,
+"label": "Budapest, Hungary"
+},
+{
+"lat": 37.98,
+"lon": 23.73,
+"label": "Athens, Greece"
+},
+{
+"lat": 44.43,
+"lon": 26.1,
+"label": "Bucharest, Romania"
+},
+{
+"lat": 38.72,
+"lon": -9.14,
+"label": "Lisbon, Portugal"
+},
+{
+"lat": 53.35,
+"lon": -6.26,
+"label": "Dublin, Ireland"
+},
+{
+"lat": 59.33,
+"lon": 18.07,
+"label": "Stockholm, Sweden"
+},
+{
+"lat": 59.91,
+"lon": 10.75,
+"label": "Oslo, Norway"
+},
+{
+"lat": 60.17,
+"lon": 24.94,
+"label": "Helsinki, Finland"
+},
+{
+"lat": 64.15,
+"lon": -21.95,
+"label": "Reykjavik, Iceland"
+},
+{
+"lat": 50.45,
+"lon": 30.52,
+"label": "Kyiv, Ukraine"
+},
+{
+"lat": 55.76,
+"lon": 37.62,
+"label": "Moscow, Russia"
+},
+{
+"lat": 59.93,
+"lon": 30.34,
+"label": "St Petersburg, Russia"
+},
+{
+"lat": 55.01,
+"lon": 82.94,
+"label": "Novosibirsk, Russia"
+},
+{
+"lat": 43.12,
+"lon": 131.9,
+"label": "Vladivostok, Russia"
+},
+{
+"lat": 55.83,
+"lon": 49.12,
+"label": "Kazan, Russia"
+},
+{
+"lat": 68.97,
+"lon": 33.1,
+"label": "Murmansk, Russia"
+},
+{
+"lat": 62.03,
+"lon": 129.73,
+"label": "Yakutsk, Russia"
+},
+{
+"lat": 41.01,
+"lon": 28.98,
+"label": "Istanbul, Turkey"
+},
+{
+"lat": 30.04,
+"lon": 31.24,
+"label": "Cairo, Egypt"
+},
+{
+"lat": 6.52,
+"lon": 3.38,
+"label": "Lagos, Nigeria"
+},
+{
+"lat": 15.5,
+"lon": 32.56,
+"label": "Khartoum, Sudan"
+},
+{
+"lat": -1.29,
+"lon": 36.82,
+"label": "Nairobi, Kenya"
+},
+{
+"lat": -6.79,
+"lon": 39.28,
+"label": "Dar es Salaam, Tanzania"
+},
+{
+"lat": -26.2,
+"lon": 28.04,
+"label": "Johannesburg, South Africa"
+},
+{
+"lat": -33.93,
+"lon": 18.42,
+"label": "Cape Town, South Africa"
+},
+{
+"lat": 33.57,
+"lon": -7.59,
+"label": "Casablanca, Morocco"
+},
+{
+"lat": 9.03,
+"lon": 38.75,
+"label": "Addis Ababa, Ethiopia"
+},
+{
+"lat": -4.32,
+"lon": 15.31,
+"label": "Kinshasa, DR Congo"
+},
+{
+"lat": 14.69,
+"lon": -17.45,
+"label": "Dakar, Senegal"
+},
+{
+"lat": -18.88,
+"lon": 47.51,
+"label": "Antananarivo, Madagascar"
+},
+{
+"lat": 25.2,
+"lon": 55.27,
+"label": "Dubai, UAE"
+},
+{
+"lat": 24.71,
+"lon": 46.68,
+"label": "Riyadh, Saudi Arabia"
+},
+{
+"lat": 32.09,
+"lon": 34.78,
+"label": "Tel Aviv, Israel"
+},
+{
+"lat": 35.69,
+"lon": 51.39,
+"label": "Tehran, Iran"
+},
+{
+"lat": 33.31,
+"lon": 44.37,
+"label": "Baghdad, Iraq"
+},
+{
+"lat": 24.86,
+"lon": 67.0,
+"label": "Karachi, Pakistan"
+},
+{
+"lat": 23.81,
+"lon": 90.41,
+"label": "Dhaka, Bangladesh"
+},
+{
+"lat": 28.61,
+"lon": 77.21,
+"label": "Delhi, India"
+},
+{
+"lat": 19.08,
+"lon": 72.88,
+"label": "Mumbai, India"
+},
+{
+"lat": 22.57,
+"lon": 88.36,
+"label": "Kolkata, India"
+},
+{
+"lat": 13.08,
+"lon": 80.27,
+"label": "Chennai, India"
+},
+{
+"lat": 6.93,
+"lon": 79.85,
+"label": "Colombo, Sri Lanka"
+},
+{
+"lat": 51.13,
+"lon": 71.43,
+"label": "Astana, Kazakhstan"
+},
+{
+"lat": 47.92,
+"lon": 106.92,
+"label": "Ulaanbaatar, Mongolia"
+},
+{
+"lat": 35.68,
+"lon": 139.76,
+"label": "Tokyo, Japan"
+},
+{
+"lat": 37.57,
+"lon": 126.98,
+"label": "Seoul, South Korea"
+},
+{
+"lat": 39.9,
+"lon": 116.41,
+"label": "Beijing, China"
+},
+{
+"lat": 31.23,
+"lon": 121.47,
+"label": "Shanghai, China"
+},
+{
+"lat": 22.32,
+"lon": 114.17,
+"label": "Hong Kong, China"
+},
+{
+"lat": 25.03,
+"lon": 121.56,
+"label": "Taipei, Taiwan"
+},
+{
+"lat": 14.6,
+"lon": 120.98,
+"label": "Manila, Philippines"
+},
+{
+"lat": 13.76,
+"lon": 100.5,
+"label": "Bangkok, Thailand"
+},
+{
+"lat": 1.35,
+"lon": 103.82,
+"label": "Singapore"
+},
+{
+"lat": -6.21,
+"lon": 106.85,
+"label": "Jakarta, Indonesia"
+},
+{
+"lat": 3.14,
+"lon": 101.69,
+"label": "Kuala Lumpur, Malaysia"
+},
+{
+"lat": 21.03,
+"lon": 105.85,
+"label": "Hanoi, Vietnam"
+},
+{
+"lat": 16.87,
+"lon": 96.2,
+"label": "Yangon, Myanmar"
+},
+{
+"lat": 11.56,
+"lon": 104.93,
+"label": "Phnom Penh, Cambodia"
+},
+{
+"lat": 4.9,
+"lon": 114.94,
+"label": "Bandar Seri Begawan, Brunei"
+},
+{
+"lat": -8.56,
+"lon": 125.58,
+"label": "Dili, Timor-Leste"
+},
+{
+"lat": -9.44,
+"lon": 147.18,
+"label": "Port Moresby, Papua New Guinea"
+},
+{
+"lat": -33.87,
+"lon": 151.21,
+"label": "Sydney, Australia"
+},
+{
+"lat": -37.81,
+"lon": 144.96,
+"label": "Melbourne, Australia"
+},
+{
+"lat": -27.47,
+"lon": 153.03,
+"label": "Brisbane, Australia"
+},
+{
+"lat": -31.95,
+"lon": 115.86,
+"label": "Perth, Australia"
+},
+{
+"lat": -34.93,
+"lon": 138.6,
+"label": "Adelaide, Australia"
+},
+{
+"lat": -12.46,
+"lon": 130.84,
+"label": "Darwin, Australia"
+},
+{
+"lat": -23.7,
+"lon": 133.87,
+"label": "Alice Springs, Australia"
+},
+{
+"lat": -36.85,
+"lon": 174.76,
+"label": "Auckland, New Zealand"
+},
+{
+"lat": -43.53,
+"lon": 172.64,
+"label": "Christchurch, New Zealand"
+},
+{
+"lat": 64.18,
+"lon": -51.72,
+"label": "Nuuk, Greenland"
+},
+{
+"lat": 37.74,
+"lon": -25.67,
+"label": "Ponta Delgada, Azores"
+},
+{
+"lat": -18.14,
+"lon": 178.44,
+"label": "Suva, Fiji"
+},
+{
+"lat": -17.54,
+"lon": -149.57,
+"label": "Papeete, French Polynesia"
+},
+{
+"lat": 13.47,
+"lon": 144.75,
+"label": "Hagatna, Guam"
+},
+{
+"lat": -22.28,
+"lon": 166.45,
+"label": "Noumea, New Caledonia"
+},
+{
+"lat": -27.11,
+"lon": -109.35,
+"label": "Easter Island, Chile"
+}
+]

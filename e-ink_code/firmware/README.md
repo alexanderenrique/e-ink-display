@@ -153,8 +153,51 @@ Displays rotating content including:
 - Cat facts (requires WiFi)
 - ISS location data (requires WiFi)
 - Useless facts (requires WiFi)
+- Optional one-off slides pushed from the aggregator (**special messages**; requires WiFi, device UUID, and server-side queue — see **`apis.special_messages`** below)
 
 **Display Modes:** Cycles through 5 modes (0-4), persisting across deep sleep using `RTC_DATA_ATTR`.
+
+**WiFi / aggregator usage:** The ESP only calls the fun HTTP endpoints for modes that are enabled in configuration (see **`config.apis`** below). The server does not enforce per-mode policy; it responds to whatever the client requests once `X-Fun-Key` matches (if the server is configured with `FUN_API_KEY`).
+
+### Fun app `apis` flags (BLE / stored JSON)
+
+When the fun app is configured (including data loaded from NVS after provisioning over BLE), optional `config.apis` booleans turn each **display mode** on or off:
+
+| Key | Mode | Content |
+|-----|------|--------|
+| `room_data` | 0 | Room temp/humidity (and WiFi RSSI when connected) |
+| `earthquake` | 1 | Earthquake slide (WiFi) |
+| `cat_facts` | 2 | Cat facts — one `GET /v1/fun/screen?m=2` per wake (WiFi), unless `all_new_facts` |
+| `iss` | 3 | ISS slide (WiFi) |
+| `useless_facts` | 4 | Useless facts — one `GET /v1/fun/screen?m=4` per wake (WiFi); ignored when `all_new_facts` is on |
+| `all_new_facts` | (uses mode 2) | When `true`, mode 2 calls `GET /v1/fun/facts/mixed?count=1` so the device shows a random slide from **any** non-empty `data/*_facts.json` pool on the server; mode 4 is skipped so cat vs useless toggles do not duplicate a second facts slot |
+| `special_messages` | (WiFi modes 1–4) | When `true` (default), each wake in an online WiFi mode first calls `GET /v1/fun/special` using the stored device UUID (`X-Device-Id`). If the server returns a slide, that slide is shown **instead of** the normal earthquake/cat/ISS/mixed/useless slide for this cycle (the message is dequeued server-side). If the server responds with no body (`204`), the firmware continues with the usual mode fetch |
+
+Fact text is always fetched live over WiFi for those modes (no NVS queue). The server still exposes `GET /v1/fun/facts/batch` for other clients; the fun app firmware no longer uses it.
+
+**Defaults:** If there is no `apis` object (e.g. `{"app":"fun","config":{}}` in [`main.cpp`](main.cpp) when nothing is stored from BLE), **all flags default to on** in [`apps/fun/app.h`](apps/fun/app.h). To limit network use, set `apis` explicitly, for example:
+
+```json
+{
+  "app": "fun",
+  "config": {
+    "refreshInterval": 2,
+    "apis": {
+      "room_data": true,
+      "cat_facts": true,
+      "iss": true,
+      "earthquake": false,
+      "useless_facts": false,
+      "all_new_facts": false,
+      "special_messages": true
+    }
+  }
+}
+```
+
+BLE provisioning stores a top-level `apis` object that [`main.cpp`](main.cpp) merges into `config` when building the app-manager JSON.
+
+**Device identity (aggregator / special messages):** In top-level provisioning JSON you can send a human-readable label (any of `displayName`, `deviceFriendlyName`, or `friendly_name`) which is persisted as `deviceFriendlyName` in Preferences and sent on each aggregator request as the `X-Device-Name` header. Optionally include `deviceId` / `device_id` (UUID) if you mint the ID in the provisioning app (**phone-mint**); otherwise NVS keeps `deviceId` empty until the firmware calls `POST /v1/devices/register` once (server-mint UUID), then repeats that id as `X-Device-Id` on later calls. To queue a one-off slide for a given UUID (or a named group), use the server admin API documented in [server README — Special messages](../server/README.md#special-messages-targeted-slides).
 
 **Dependencies:** SHT31 sensor (I2C), WiFi for API calls
 

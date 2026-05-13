@@ -62,4 +62,9 @@
 "YOUR_ROOT_CA_CERTIFICATE_HERE\n" \
 "-----END CERTIFICATE-----\n"
 
+// Fun aggregator (Raspberry Pi). Use http://host:8080 for LAN HTTP or https:// with valid CA in ROOT_CA_CERT.
+#define FUN_FACTS_BASE_URL "http://192.168.1.10:8080"
+// Optional: must match server FUN_API_KEY if set; leave empty for open LAN
+#define FUN_FACTS_API_KEY ""
+
 #endif // HARDWARE_CONFIG_H

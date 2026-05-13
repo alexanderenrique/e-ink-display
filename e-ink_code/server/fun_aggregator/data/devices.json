@@ -1,0 +1,22 @@
+{
+  "devices": {
+    "a": {
+      "friendly_name": "unnamed",
+      "hardware_mac": null,
+      "last_seen_at": "2026-05-12T18:53:23.706492+00:00",
+      "registered_at": "2026-05-12T18:53:23.706487+00:00"
+    },
+    "b": {
+      "friendly_name": "unnamed",
+      "hardware_mac": null,
+      "last_seen_at": "2026-05-12T18:53:23.707486+00:00",
+      "registered_at": "2026-05-12T18:53:23.707481+00:00"
+    },
+    "d1": {
+      "friendly_name": "unnamed",
+      "hardware_mac": null,
+      "last_seen_at": "2026-05-12T18:53:23.704533+00:00",
+      "registered_at": "2026-05-12T18:53:23.698592+00:00"
+    }
+  }
+}

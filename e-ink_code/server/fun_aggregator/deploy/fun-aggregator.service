@@ -1,0 +1,45 @@
+# Install on Raspberry Pi:
+#   sudo apt install python3-venv
+#   sudo mkdir -p /opt/fun-aggregator && sudo chown $USER:$USER /opt/fun-aggregator
+#   rsync -a server/fun_aggregator/ /opt/fun-aggregator/
+#   cd /opt/fun-aggregator && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   sudo cp deploy/fun-aggregator.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now fun-aggregator
+#
+# Optional env file (FUN_API_KEY strongly recommended for any network exposure):
+#
+#   FUN_API_KEY=<long random secret>   # mandatory if FUN_REQUIRE_API_KEY is on
+#   FUN_REQUIRE_API_KEY=1              # fail fast at startup if FUN_API_KEY unset (recommended on Pi)
+#
+#   FUN_RATE_LIMIT_SCREEN=60/minute    # per-client-IP limit on GET /v1/fun/screen
+#   FUN_RATE_LIMIT_BATCH=40/minute    # per-client-IP limit on GET /v1/fun/facts/batch
+#
+#   FUN_DEVICE_STORE=data/devices.json # device roster (UUID ↔ friendly_name); parent dir created if missing
+#   FUN_SPECIAL_STORE=data/special_messages.json  # FIFO special slides per device + named groups JSON
+#   FUN_ADMIN_API_KEY=<secret>  # POST /v1/admin/special (header X-Fun-Admin-Key); omit to disable admin
+#
+#   REFRESH_SECONDS=900
+#
+#   Optional upstream fact APIs (see server/README.md):
+#   FUN_CAT_UPSTREAM_URL=...  FUN_CAT_JSON_PATH=...
+#   FACT_REFRESH_SECONDS=400  FACT_ROUND_ROBIN=1  FACT_POOL_MAX_LINES=30
+#
+# Example:
+#   sudo nano /etc/fun-aggregator.env
+
+[Unit]
+Description=Fun facts aggregator for e-ink displays
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/fun-aggregator
+EnvironmentFile=-/etc/fun-aggregator.env
+ExecStart=/opt/fun-aggregator/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

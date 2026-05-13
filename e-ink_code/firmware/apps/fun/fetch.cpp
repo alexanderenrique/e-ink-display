@@ -1,279 +1,342 @@
 #include "fetch.h"
-#include "iss_geo_lookup.h"
 #include "config.h"
-#include <Wire.h>
+#include "../../core/bluetooth/cold_start_ble.h"
 #include <Adafruit_SHT31.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
+#include <Wire.h>
+#include <time.h>
 
-// SHT31 sensor instance
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
-// API endpoints
-const char* meowfacts_url = "https://meowfacts.herokuapp.com/";
-const char* earthquake_url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson";
-const char* iss_url = "https://api.wheretheiss.at/v1/satellites/25544";
-const char* uselessfacts_url = "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en";
+static constexpr time_t kMinValidUtcEpoch = 1577836800;
+
+static constexpr const char* kSpecialHoldNs = "fun_sp";
+static constexpr const char* kHoldKeyUntil = "u";
+static constexpr const char* kHoldKeyText = "t";
+static constexpr const char* kHoldKeyLayout = "l";
+
+static bool utcClockProbablyValid() {
+    return time(nullptr) > kMinValidUtcEpoch;
+}
+
+static void clearSpecialHoldPrefs() {
+    Preferences prefs;
+    if (prefs.begin(kSpecialHoldNs, false)) {
+        prefs.clear();
+        prefs.end();
+    }
+}
+
+static void persistSpecialHold(const FunSlide& slide) {
+    if (slide.displayHoldUntilEpoch == 0 || slide.text.length() == 0) {
+        return;
+    }
+    Preferences prefs;
+    if (!prefs.begin(kSpecialHoldNs, false)) {
+        return;
+    }
+    prefs.putUInt(kHoldKeyUntil, slide.displayHoldUntilEpoch);
+    prefs.putString(kHoldKeyText, slide.text);
+    prefs.putString(kHoldKeyLayout, slide.layout.length() > 0 ? slide.layout : String("default"));
+    prefs.end();
+}
+
+namespace {
+
+constexpr size_t kMaxFriendlyChars = 160;
+
+/** Obtain server-assigned device_id when NVS slot is empty; phone-mint id skips POST. */
+static bool ensureRegisteredWithFunServer() {
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    String deviceId = ColdStartBle::getStoredDeviceId();
+    if (deviceId.length() > 0) {
+        return true;
+    }
+
+    String url = String(FUN_FACTS_BASE_URL) + "/v1/devices/register";
+    DynamicJsonDocument bodyDoc(512);
+    String friendly = ColdStartBle::getStoredFriendlyName();
+    if (friendly.length() == 0) {
+        friendly = String("eink-") + WiFi.macAddress();
+        friendly.replace(":", "");
+    }
+    if (friendly.length() > kMaxFriendlyChars) {
+        friendly = friendly.substring(0, kMaxFriendlyChars);
+    }
+    bodyDoc["friendly_name"] = friendly;
+    bodyDoc["hardware_mac"] = WiFi.macAddress();
+
+    HTTPClient http;
+    if (!http.begin(url)) {
+        Serial.println("[FunFetch] register: http.begin failed");
+        return false;
+    }
+    if (strlen(FUN_FACTS_API_KEY) > 0) {
+        http.addHeader("X-Fun-Key", FUN_FACTS_API_KEY);
+    }
+    http.addHeader("Content-Type", "application/json");
+
+    String bodyStr;
+    serializeJson(bodyDoc, bodyStr);
+
+    int httpCode = http.POST(bodyStr);
+    String payload = http.getString();
+    http.end();
+
+    if (httpCode <= 0) {
+        Serial.printf("[FunFetch] register HTTP failed: %s\n", http.errorToString(httpCode).c_str());
+        return false;
+    }
+    if (httpCode != HTTP_CODE_OK) {
+        Serial.printf("[FunFetch] register HTTP status=%d body=%s\n", httpCode, payload.c_str());
+        return false;
+    }
+    payload.trim();
+
+    DynamicJsonDocument resDoc(384);
+    DeserializationError err = deserializeJson(resDoc, payload);
+    if (err) {
+        Serial.print("[FunFetch] register JSON error: ");
+        Serial.println(err.c_str());
+        return false;
+    }
+    const char* newId = nullptr;
+    if (resDoc.containsKey("device_id")) {
+        newId = resDoc["device_id"].as<const char*>();
+    } else if (resDoc.containsKey("deviceId")) {
+        newId = resDoc["deviceId"].as<const char*>();
+    }
+    if (newId == nullptr || strlen(newId) == 0) {
+        Serial.println("[FunFetch] register: missing device_id in response");
+        return false;
+    }
+
+    ColdStartBle::putStoredDeviceId(String(newId));
+    Serial.println("[FunFetch] Registered with fun server");
+    return true;
+}
+
+static void addFunHeaders(HTTPClient& http) {
+    if (strlen(FUN_FACTS_API_KEY) > 0) {
+        http.addHeader("X-Fun-Key", FUN_FACTS_API_KEY);
+    }
+    String did = ColdStartBle::getStoredDeviceId();
+    if (did.length() > 0) {
+        http.addHeader("X-Device-Id", did);
+    }
+    String fname = ColdStartBle::getStoredFriendlyName();
+    if (fname.length() > 0) {
+        http.addHeader("X-Device-Name", fname);
+    }
+}
+
+}  // namespace
+
+void syncFunClockForSpecialHold() {
+    if (utcClockProbablyValid()) {
+        return;
+    }
+    configTime(0, 0, "pool.ntp.org");
+    for (int i = 0; i < 45; ++i) {
+        if (time(nullptr) > kMinValidUtcEpoch) {
+            return;
+        }
+        delay(100);
+    }
+}
+
+bool loadHeldSpecialSlide(FunSlide& out) {
+    if (!utcClockProbablyValid()) {
+        return false;
+    }
+    time_t nowSecs = time(nullptr);
+    Preferences prefs;
+    if (!prefs.begin(kSpecialHoldNs, true)) {
+        return false;
+    }
+    uint32_t until = prefs.getUInt(kHoldKeyUntil, 0);
+    String txt = prefs.getString(kHoldKeyText, "");
+    String lay = prefs.getString(kHoldKeyLayout, "default");
+    prefs.end();
+
+    if (until == 0 || txt.length() == 0) {
+        return false;
+    }
+
+    uint32_t nowU = static_cast<uint32_t>(nowSecs);
+    if (nowU >= until) {
+        clearSpecialHoldPrefs();
+        return false;
+    }
+
+    out.text = txt;
+    out.layout = lay;
+    out.layout.trim();
+    out.layout.toLowerCase();
+    out.displayHoldUntilEpoch = until;
+    return true;
+}
 
 void initI2C() {
-    // Initialize I2C with custom pins for ESP32-C3
     Wire.begin(I2C_SDA, I2C_SCL);
-    
-    // Initialize SHT31 sensor
-    if (sht31.begin(0x44)) { // Default I2C address is 0x44
-    } else {
+
+    if (!sht31.begin(0x44)) {
         Serial.println("SHT31 sensor initialization failed!");
     }
 }
 
-String fetchMeowFact() {
+bool fetchFunScreenSlide(int mode, FunSlide& out) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected!");
-        return "WiFi Error";
+        return false;
     }
-    
+
+    ensureRegisteredWithFunServer();
+
     HTTPClient http;
-    http.begin(meowfacts_url);
-    
+    String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/screen?m=" + String(mode);
+    if (!http.begin(url)) {
+        return false;
+    }
+    addFunHeaders(http);
+
     int httpCode = http.GET();
-    String fact = "Error fetching fact";
-    
+    bool ok = false;
     if (httpCode > 0) {
         String payload = http.getString();
-        Serial.println("Raw response: " + payload);
-        
-        // Clean up payload - remove any trailing characters like %
         payload.trim();
-        
-        // Parse JSON: {"data":["fact text here"]}
-        DynamicJsonDocument doc(2048);
+        DynamicJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, payload);
-        
-        if (error) {
+        if (!error && doc.is<JsonObject>()) {
+            ok = funSlideFromJson(doc.as<JsonObjectConst>(), out);
+        } else if (error) {
             Serial.print("JSON parse error: ");
             Serial.println(error.c_str());
-        } else if (doc.containsKey("data") && doc["data"].is<JsonArray>() && doc["data"].size() > 0) {
-            fact = doc["data"][0].as<String>();
-            fact.trim(); // Clean up the fact text
-            fact = String("Cat Facts\n") + fact;
-            Serial.println("Parsed fact: " + fact);
-        } else {
-            Serial.println("Unexpected JSON structure");
         }
     } else {
-        Serial.printf("HTTP request failed, error: %s\n", http.errorToString(httpCode).c_str());
+        Serial.printf("HTTP screen failed: %s\n", http.errorToString(httpCode).c_str());
     }
-    
     http.end();
-    return fact;
+    return ok;
 }
 
-String fetchUselessFact() {
+bool fetchMixedFunSlide(FunSlide& out) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected!");
-        return "WiFi Error";
+        return false;
     }
-    
+
+    ensureRegisteredWithFunServer();
+
     HTTPClient http;
-    http.begin(uselessfacts_url);
-    
-    int httpCode = http.GET();
-    String fact = "Error fetching fact";
-    
-    if (httpCode > 0) {
-        String payload = http.getString();
-        Serial.println("Raw response: " + payload);
-        
-        // Clean up payload
-        payload.trim();
-        
-        // Parse JSON: {"id":"...","text":"fact text here","source":"...","source_url":"...","language":"en","permalink":"..."}
-        DynamicJsonDocument doc(2048);
-        DeserializationError error = deserializeJson(doc, payload);
-        
-        if (error) {
-            Serial.print("JSON parse error: ");
-            Serial.println(error.c_str());
-        } else if (doc.containsKey("text")) {
-            fact = doc["text"].as<String>();
-            fact.trim(); // Clean up the fact text
-            fact = String("Fun Fact!\n") + fact;
-            Serial.println("Parsed fact: " + fact);
-        } else {
-            Serial.println("Unexpected JSON structure");
-        }
-    } else {
-        Serial.printf("HTTP request failed, error: %s\n", http.errorToString(httpCode).c_str());
+    String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/facts/mixed?count=1";
+    if (!http.begin(url)) {
+        return false;
     }
-    
+    addFunHeaders(http);
+
+    int httpCode = http.GET();
+    if (httpCode <= 0) {
+        Serial.printf("HTTP mixed facts failed: %s\n", http.errorToString(httpCode).c_str());
+        http.end();
+        return false;
+    }
+
+    String payload = http.getString();
     http.end();
-    return fact;
+    payload.trim();
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, payload);
+    if (error) {
+        Serial.print("Mixed facts JSON error: ");
+        Serial.println(error.c_str());
+        return false;
+    }
+    if (!doc.containsKey("facts") || !doc["facts"].is<JsonArray>() || doc["facts"].as<JsonArrayConst>().size() == 0) {
+        Serial.println("Mixed facts: empty or missing facts array");
+        return false;
+    }
+    JsonObjectConst first = doc["facts"][0].as<JsonObjectConst>();
+    return funSlideFromJson(first, out);
 }
 
-// Helper function to determine if DST is in effect for Pacific Time
-// DST runs from 2nd Sunday in March (approx March 8-14) to 1st Sunday in November (approx Nov 1-7)
-bool isPacificDST(struct tm* timeinfo) {
-    if (timeinfo == nullptr) return false;
-    
-    int month = timeinfo->tm_mon + 1; // tm_mon is 0-11
-    int day = timeinfo->tm_mday;
-    
-    // Before March 8: PST (no DST)
-    if (month < 3 || (month == 3 && day < 8)) return false;
-    
-    // After November 7: PST (no DST)
-    if (month > 11 || (month == 11 && day > 7)) return false;
-    
-    // March 8 through November 7: DST
+bool fetchSpecialSlide(FunSlide& out) {
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    ensureRegisteredWithFunServer();
+    if (ColdStartBle::getStoredDeviceId().length() == 0) {
+        return false;
+    }
+
+    HTTPClient http;
+    String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/special";
+    if (!http.begin(url)) {
+        return false;
+    }
+    addFunHeaders(http);
+
+    int httpCode = http.GET();
+    if (httpCode == 204) {
+        http.end();
+        return false;
+    }
+    if (httpCode <= 0) {
+        Serial.printf("[FunFetch] Special slide HTTP failed: %s\n", http.errorToString(httpCode).c_str());
+        http.end();
+        return false;
+    }
+    if (httpCode != HTTP_CODE_OK) {
+        Serial.printf("[FunFetch] Special slide HTTP status=%d\n", httpCode);
+        http.end();
+        return false;
+    }
+
+    String payload = http.getString();
+    http.end();
+    payload.trim();
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, payload);
+    if (error) {
+        Serial.print("[FunFetch] Special slide JSON error: ");
+        Serial.println(error.c_str());
+        return false;
+    }
+    if (!doc.is<JsonObject>()) {
+        Serial.println("[FunFetch] Special slide JSON error: not an object");
+        return false;
+    }
+    if (!funSlideFromJson(doc.as<JsonObjectConst>(), out)) {
+        return false;
+    }
+    // Older servers: hold for one UTC hour locally (still capped server-side when possible).
+    if (out.displayHoldUntilEpoch == 0 && utcClockProbablyValid()) {
+        time_t deadline = time(nullptr) + static_cast<time_t>(3600);
+        out.displayHoldUntilEpoch = static_cast<uint32_t>(deadline);
+    }
+    if (out.displayHoldUntilEpoch != 0) {
+        persistSpecialHold(out);
+    }
     return true;
 }
 
-String getEarthQuakeFact(){
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi not connected!");
-        return "WiFi Error";
-    }
-    
-    HTTPClient http;
-    http.begin(earthquake_url);
-    
-    int httpCode = http.GET();
-    String result = "Error fetching earthquake data";
-    
-    if (httpCode > 0) {
-        String payload = http.getString();
-        Serial.println("Raw response length: " + String(payload.length()));
-        
-        // Clean up payload
-        payload.trim();
-        
-        // Parse GeoJSON: {"type":"FeatureCollection","features":[...]}
-        // Need larger buffer for earthquake data (32KB should be enough)
-        DynamicJsonDocument doc(32768);
-        DeserializationError error = deserializeJson(doc, payload);
-        
-        if (error) {
-            Serial.print("JSON parse error: ");
-            Serial.println(error.c_str());
-        } else if (doc.containsKey("features") && doc["features"].is<JsonArray>() && doc["features"].size() > 0) {
-            // Get the first (latest) earthquake
-            JsonObject feature = doc["features"][0];
-            JsonObject properties = feature["properties"];
-            
-            // Extract magnitude, location, and time
-            float magnitude = properties["mag"].as<float>();
-            String place = properties["place"].as<String>();
-            unsigned long long timeUnixMs = properties["time"].as<unsigned long long>();
-            
-            // Convert Unix timestamp (milliseconds) to readable time
-            // timeUnixMs is in milliseconds, so divide by 1000 for seconds
-            time_t timeSeconds = (time_t)(timeUnixMs / 1000);
-            
-            // First calculate Pacific time assuming PST (UTC-8)
-            time_t pacificTimeSeconds = timeSeconds - (8 * 3600);
-            struct tm *pacificTime = gmtime(&pacificTimeSeconds);
-            
-            // Check if DST is in effect based on Pacific time
-            // If yes, recalculate with PDT offset (UTC-7)
-            bool isDST = false;
-            if (pacificTime != nullptr) {
-                isDST = isPacificDST(pacificTime);
-                if (isDST) {
-                    pacificTimeSeconds = timeSeconds - (7 * 3600);
-                    pacificTime = gmtime(&pacificTimeSeconds);
-                }
-            }
-            
-            // Format: "M 4.6 - Location\nTime"
-            char timeStr[64];
-            if (pacificTime != nullptr) {
-                const char* tzLabel = isDST ? "PDT" : "PST";
-                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M", pacificTime);
-                snprintf(timeStr + strlen(timeStr), sizeof(timeStr) - strlen(timeStr), " %s", tzLabel);
-            } else {
-                // Fallback: show Unix timestamp
-                snprintf(timeStr, sizeof(timeStr), "Time: %llu", timeUnixMs);
-            }
-            
-            result = String("Latest Earthquake\n");
-            result += "M " + String(magnitude, 1) + " - " + place + "\n" + String(timeStr);
-            
-            Serial.println("Latest earthquake:");
-            Serial.println("  Magnitude: " + String(magnitude));
-            Serial.println("  Location: " + place);
-            Serial.println("  Time: " + String(timeStr));
-        } else {
-            Serial.println("Unexpected JSON structure or no earthquakes found");
-        }
-    } else {
-        Serial.printf("HTTP request failed, error: %s\n", http.errorToString(httpCode).c_str());
-    }
-    
-    http.end();
-    return result;
-}
-
-String getISSData() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi not connected!");
-        return "WiFi Error";
-    }
-    
-    HTTPClient http;
-    http.begin(iss_url);
-    
-    int httpCode = http.GET();
-    String result = "Error fetching ISS data";
-    
-    if (httpCode > 0) {
-        String payload = http.getString();
-        Serial.println("Raw ISS response: " + payload);
-        
-        // Clean up payload
-        payload.trim();
-        
-        // Parse JSON
-        DynamicJsonDocument doc(2048);
-        DeserializationError error = deserializeJson(doc, payload);
-        
-        if (error) {
-            Serial.print("JSON parse error: ");
-            Serial.println(error.c_str());
-        } else {
-            // Extract ISS data
-            float latitude = doc["latitude"].as<float>();
-            float longitude = doc["longitude"].as<float>();
-            float altitude_km = doc["altitude"].as<float>();
-            float velocity_kph = doc["velocity"].as<float>();
-            
-            // Convert to miles
-            float altitude_miles = altitude_km * 0.621371;
-            float velocity_mph = velocity_kph * 0.621371;
-            
-            result = String("Where is the ISS?\n");
-            result += describeNearestPlace(latitude, longitude) + "\n";
-            result += String("Altitude: ") + String(altitude_miles, 2) + " mi\n";
-            result += String("Velocity: ") + String(velocity_mph, 2) + " mph\n";
-
-        }
-    } else {
-        Serial.printf("HTTP request failed, error: %s\n", http.errorToString(httpCode).c_str());
-    }
-    
-    http.end();
-    return result;
-}
-
 String getRoomData() {
-    // Reinitialize I2C if it was disabled
     initI2C();
-    
+
     float temperature = sht31.readTemperature();
     temperature = temperature * 9.0 / 5.0 + 32.0;
     float humidity = sht31.readHumidity();
     String result = String("Room Temp & Humidity\n");
     result += String("Temp: ") + String(temperature, 1) + "°F\n";
     result += String("Humidity: ") + String(humidity, 1) + "%";
-    
-    // Add WiFi info if connected
+
     if (WiFi.status() == WL_CONNECTED) {
         int rssi = WiFi.RSSI();
         String strengthDesc;
@@ -292,6 +355,6 @@ String getRoomData() {
         }
         result += String("\nWiFi:") + String(rssi) + " dBm (" + strengthDesc + ")";
     }
-    
+
     return result;
 }

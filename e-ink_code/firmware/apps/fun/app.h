@@ -33,6 +33,8 @@ private:
     bool _apiEarthquake = true;
     bool _apiISS = true;
     bool _apiUselessFacts = true;
+    bool _apiAllNewFacts = false;
+    bool _apiSpecialMessages = true;
     
     // Helper methods
     void handleOTA();

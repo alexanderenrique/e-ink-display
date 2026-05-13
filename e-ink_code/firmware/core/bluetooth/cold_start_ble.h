@@ -67,6 +67,22 @@ public:
      */
     static bool shouldSkipBle();
 
+    /**
+     * Opaque server- or provision-assigned device id (UUID).
+     */
+    static String getStoredDeviceId();
+
+    /**
+     * User-facing label from BLE provisioning; sent as X-Device-Name when calling the aggregator.
+     */
+    static String getStoredFriendlyName();
+
+    /** Persist server-minted device id after POST /v1/devices/register. */
+    static void putStoredDeviceId(const String& deviceId);
+
+    /** Update NVS-friendly name (e.g. after reprovisioning). Clip to firmware max length (160 chars). */
+    static void putStoredFriendlyName(const String& friendlyName);
+
 private:
     bool _active;
     uint32_t _startMillis;

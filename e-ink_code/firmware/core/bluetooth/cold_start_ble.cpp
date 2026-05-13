@@ -184,6 +184,43 @@ static void processPendingConfig() {
         serializeJson(doc["apis"], apisJson);
         preferences.putString("apis", apisJson);
     }
+    auto putSanitizedFriendly = [&preferences](const char* raw) -> void {
+        if (raw == nullptr) return;
+        String s(raw);
+        s.trim();
+        if (s.length() > 160) {
+            s = s.substring(0, 160);
+        }
+        if (s.length() > 0) {
+            preferences.putString("deviceFriendlyName", s);
+        }
+    };
+    if (doc.containsKey("displayName")) {
+        putSanitizedFriendly(doc["displayName"].as<const char*>());
+    } else if (doc.containsKey("deviceFriendlyName")) {
+        putSanitizedFriendly(doc["deviceFriendlyName"].as<const char*>());
+    } else if (doc.containsKey("friendly_name")) {
+        putSanitizedFriendly(doc["friendly_name"].as<const char*>());
+    }
+    if (doc.containsKey("deviceId")) {
+        String did(doc["deviceId"].as<const char*>());
+        did.trim();
+        if (did.length() > 64) {
+            did = did.substring(0, 64);
+        }
+        if (did.length() > 0) {
+            preferences.putString("deviceId", did);
+        }
+    } else if (doc.containsKey("device_id")) {
+        String did(doc["device_id"].as<const char*>());
+        did.trim();
+        if (did.length() > 64) {
+            did = did.substring(0, 64);
+        }
+        if (did.length() > 0) {
+            preferences.putString("deviceId", did);
+        }
+    }
     // Shelf app: bin ID, server host, server port
     if (doc.containsKey("binId")) {
         preferences.putString("binId", doc["binId"].as<const char*>());
@@ -492,6 +529,49 @@ String ColdStartBle::getStoredConfigJson() {
     String configJson = preferences.getString("configJson", "");
     preferences.end();
     return configJson;
+}
+
+String ColdStartBle::getStoredDeviceId() {
+    Preferences preferences;
+    preferences.begin("config", true);
+    String id = preferences.getString("deviceId", "");
+    preferences.end();
+    return id;
+}
+
+String ColdStartBle::getStoredFriendlyName() {
+    Preferences preferences;
+    preferences.begin("config", true);
+    String name = preferences.getString("deviceFriendlyName", "");
+    preferences.end();
+    return name;
+}
+
+void ColdStartBle::putStoredDeviceId(const String& deviceId) {
+    String id = deviceId;
+    id.trim();
+    if (id.length() > 64) {
+        id = id.substring(0, 64);
+    }
+    if (id.length() == 0) {
+        return;
+    }
+    Preferences preferences;
+    preferences.begin("config", false);
+    preferences.putString("deviceId", id);
+    preferences.end();
+}
+
+void ColdStartBle::putStoredFriendlyName(const String& friendlyName) {
+    String name = friendlyName;
+    name.trim();
+    if (name.length() > 160) {
+        name = name.substring(0, 160);
+    }
+    Preferences preferences;
+    preferences.begin("config", false);
+    preferences.putString("deviceFriendlyName", name);
+    preferences.end();
 }
 
 bool ColdStartBle::hasStoredConfig() {

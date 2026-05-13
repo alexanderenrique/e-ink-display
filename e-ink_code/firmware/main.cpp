@@ -310,6 +310,19 @@ void setup() {
             } else if (storedDoc.containsKey("server_port")) {
                 config["serverPort"] = storedDoc["server_port"];
             }
+            // Device identity (friendly name + optional phone-mint UUID) for fun aggregator / messaging
+            if (storedDoc.containsKey("displayName")) {
+                config["displayName"] = storedDoc["displayName"];
+            } else if (storedDoc.containsKey("deviceFriendlyName")) {
+                config["displayName"] = storedDoc["deviceFriendlyName"];
+            } else if (storedDoc.containsKey("friendly_name")) {
+                config["displayName"] = storedDoc["friendly_name"];
+            }
+            if (storedDoc.containsKey("deviceId")) {
+                config["deviceId"] = storedDoc["deviceId"];
+            } else if (storedDoc.containsKey("device_id")) {
+                config["deviceId"] = storedDoc["device_id"];
+            }
             // Messages app: array of up to 10 messages
             if (storedDoc.containsKey("messages") && storedDoc["messages"].is<JsonArray>()) {
                 config["messages"] = storedDoc["messages"];
