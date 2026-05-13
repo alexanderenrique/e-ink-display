@@ -21,6 +21,14 @@ _DATA = Path(__file__).resolve().parent / "data"
 
 _DEFAULT_UA = "fun-aggregator/1.0 (fact harvest; +https://github.com/)"
 
+# Default upstreams match pre-aggregator firmware URLs (see legacy fun fetch.cpp, ~b9c92e7).
+# Cat: {"data":["..."]} — array handled in extract_fact_from_json.
+DEFAULT_CAT_FACT_UPSTREAM_URL = "https://meowfacts.herokuapp.com/"
+# Useless: {"text":"..."}
+DEFAULT_USELESS_FACT_UPSTREAM_URL = (
+    "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en"
+)
+
 _ROUND_ROBIN_INDEX = 0
 
 
@@ -109,7 +117,12 @@ def load_fact_sources() -> list[FactSource]:
     for pool_id, url_key, path_key in mapping:
         url = os.getenv(url_key, "").strip()
         if not url:
-            continue
+            if pool_id == "cat_facts":
+                url = DEFAULT_CAT_FACT_UPSTREAM_URL
+            elif pool_id == "useless_facts":
+                url = DEFAULT_USELESS_FACT_UPSTREAM_URL
+            else:
+                continue
         jp = os.getenv(path_key, "").strip() or None
         sources.append(FactSource(pool_id=pool_id, url=url, json_path=jp))
     return sources
@@ -149,6 +162,10 @@ def extract_fact_from_json(data: Any, json_path: str | None) -> str | None:
             v = data.get(k)
             if isinstance(v, str) and v.strip():
                 return _normalize_text(v)
+            if isinstance(v, list) and v:
+                first = v[0]
+                if isinstance(first, str) and first.strip():
+                    return _normalize_text(first)
     return None
 
 

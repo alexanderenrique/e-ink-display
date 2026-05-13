@@ -20,9 +20,9 @@
 #
 #   REFRESH_SECONDS=900
 #
-#   Optional upstream fact APIs (see server/README.md):
-#   FUN_CAT_UPSTREAM_URL=...  FUN_CAT_JSON_PATH=...
-#   FACT_REFRESH_SECONDS=400  FACT_ROUND_ROBIN=1  FACT_POOL_MAX_LINES=30
+#   Optional upstream fact APIs (see server/README.md). Built-in defaults: meowfacts + uselessfacts.jsph
+#   when FUN_FACT_SOURCES_JSON is unset and per-URL env vars are empty.
+#   Live check: cd /opt/fun-aggregator && .venv/bin/python smoke_fact_upstreams.py
 #
 # Example:
 #   sudo nano /etc/fun-aggregator.env

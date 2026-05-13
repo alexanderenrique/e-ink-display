@@ -21,6 +21,46 @@ def test_extract_fact_fallback_keys() -> None:
     assert fact_harvest.extract_fact_from_json({"fact": "x y"}, None) == "x y"
     assert fact_harvest.extract_fact_from_json({"text": "a"}, None) == "a"
     assert fact_harvest.extract_fact_from_json({"data": "b"}, None) == "b"
+    assert fact_harvest.extract_fact_from_json(
+        {"data": ["legacy meowfacts line"]}, None
+    ) == "legacy meowfacts line"
+
+
+def test_load_fact_sources_legacy_default_upstreams(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FUN_FACT_SOURCES_JSON", raising=False)
+    monkeypatch.delenv("FUN_CAT_UPSTREAM_URL", raising=False)
+    monkeypatch.delenv("FUN_USELESS_UPSTREAM_URL", raising=False)
+    monkeypatch.delenv("FUN_FUN_UPSTREAM_URL", raising=False)
+    sources = fact_harvest.load_fact_sources()
+    assert len(sources) == 2
+    assert sources[0].pool_id == "cat_facts"
+    assert sources[0].url == fact_harvest.DEFAULT_CAT_FACT_UPSTREAM_URL
+    assert sources[0].json_path is None
+    assert sources[1].pool_id == "useless_facts"
+    assert sources[1].url == fact_harvest.DEFAULT_USELESS_FACT_UPSTREAM_URL
+    assert sources[1].json_path is None
+
+
+def test_load_fact_sources_cat_env_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FUN_FACT_SOURCES_JSON", raising=False)
+    monkeypatch.setenv("FUN_CAT_UPSTREAM_URL", "https://custom.example/cat")
+    monkeypatch.delenv("FUN_USELESS_UPSTREAM_URL", raising=False)
+    monkeypatch.delenv("FUN_FUN_UPSTREAM_URL", raising=False)
+    sources = fact_harvest.load_fact_sources()
+    assert len(sources) == 2
+    assert sources[0].url == "https://custom.example/cat"
+    assert sources[1].url == fact_harvest.DEFAULT_USELESS_FACT_UPSTREAM_URL
+
+
+def test_load_fact_sources_useless_env_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FUN_FACT_SOURCES_JSON", raising=False)
+    monkeypatch.delenv("FUN_CAT_UPSTREAM_URL", raising=False)
+    monkeypatch.setenv("FUN_USELESS_UPSTREAM_URL", "https://custom.example/useless")
+    monkeypatch.delenv("FUN_FUN_UPSTREAM_URL", raising=False)
+    sources = fact_harvest.load_fact_sources()
+    assert len(sources) == 2
+    assert sources[0].url == fact_harvest.DEFAULT_CAT_FACT_UPSTREAM_URL
+    assert sources[1].url == "https://custom.example/useless"
 
 
 def test_append_fifo_dedupe_and_cap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

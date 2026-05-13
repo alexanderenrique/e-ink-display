@@ -15,6 +15,7 @@ from models import FunSlide
 
 log = logging.getLogger(__name__)
 
+# Same endpoints as legacy ESP32 fun `fetch.cpp` (pre-aggregator).
 USGS_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson"
 ISS_URL = "https://api.wheretheiss.at/v1/satellites/25544"
 

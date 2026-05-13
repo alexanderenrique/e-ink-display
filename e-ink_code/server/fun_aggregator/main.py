@@ -6,7 +6,8 @@ Environment (often /etc/fun-aggregator.env): FUN_API_KEY (shared secret header X
 FUN_REQUIRE_API_KEY=1 to fail startup without FUN_API_KEY, FUN_RATE_LIMIT_SCREEN and FUN_RATE_LIMIT_BATCH
 (SlowAPI per-IP defaults: 60/minute and 40/minute for GET fun endpoints.)
 
-Upstream facts (optional): FUN_CAT_UPSTREAM_URL, FUN_USELESS_UPSTREAM_URL, FUN_FUN_UPSTREAM_URL,
+Upstream facts: FUN_CAT_UPSTREAM_URL / FUN_USELESS_UPSTREAM_URL (optional overrides; built-in defaults match
+legacy firmware: meowfacts + uselessfacts.jsph when FUN_FACT_SOURCES_JSON is unset), FUN_FUN_UPSTREAM_URL,
 FUN_CAT_JSON_PATH / FUN_USELESS_JSON_PATH / FUN_FUN_JSON_PATH (dot-separated JSON keys), or FUN_FACT_SOURCES_JSON.
 FACT_REFRESH_SECONDS (default 400), FACT_ROUND_ROBIN (default 1), FACT_POOL_MAX_LINES (default 30),
 FACT_FETCHES_PER_SOURCE_PER_CYCLE, FACT_INTER_SOURCE_DELAY_SECONDS, FACT_UPSTREAM_USER_AGENT, etc.

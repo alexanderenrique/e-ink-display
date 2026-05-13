@@ -6,116 +6,227 @@ This folder is the right place to run the API—on a **Raspberry Pi at home**, o
 
 ---
 
-## Raspberry Pi (recommended home setup)
+## Raspberry Pi (step-by-step)
 
-**Assumptions:** Raspberry Pi OS with Python 3.10+ and network access. The service listens on **port 8080** by default.
+Use this checklist to run the aggregator on **Raspberry Pi OS** (or another Debian-based Pi image). The HTTP server listens on **port 8080** by default. The **systemd** unit uses **`WorkingDirectory=/opt/fun-aggregator`**, so pool files and default `data/*.json` paths live next to the app unless you override env vars.
 
-### 1. System packages
+### 1. Prerequisites
+
+- Raspberry Pi on your network, with **Python 3.10+** (`python3 --version`).
+- Decide which Linux user runs the service. These steps use **`pi`**; if you use another account, set that user in **`deploy/fun-aggregator.service`** (`User=` and file ownership under `/opt` and `/var/lib`).
+
+### 2. System packages
 
 ```bash
 sudo apt update
 sudo apt install -y python3-venv
 ```
 
-### 2. Install app under `/opt/fun-aggregator`
+### 3. Install app files under `/opt/fun-aggregator`
 
-Pick a user that will run the service (below uses `pi`; change `User=` in the unit file if you use another account).
+On the **Pi**:
 
 ```bash
 sudo mkdir -p /opt/fun-aggregator
 sudo chown "$USER":"$USER" /opt/fun-aggregator
 ```
 
-Copy the `fun_aggregator` tree from this repo (from the **repository root** on your dev machine; adjust `pi@your-pi`):
+From your **development machine** (repository **root**; adjust `pi@raspberrypi.local`):
 
 ```bash
-rsync -a --exclude '.venv' server/fun_aggregator/ pi@your-pi:/opt/fun-aggregator/
+rsync -a --exclude '.venv' server/fun_aggregator/ pi@raspberrypi.local:/opt/fun-aggregator/
 ```
 
-On the Pi:
+Alternatively, clone the repo on the Pi and copy or symlink so that `/opt/fun-aggregator` contains the contents of `server/fun_aggregator/` (`main.py`, `requirements.txt`, `deploy/`, `data/`, etc.).
+
+### 4. Python virtualenv and dependencies
+
+On the **Pi**:
 
 ```bash
 cd /opt/fun-aggregator
 python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 ```
 
-To run unit tests locally: `.venv/bin/pip install -r requirements-dev.txt` then `cd /path/to/fun_aggregator && .venv/bin/python -m pytest`.
+(Optional) Dev dependencies and unit tests:
 
-### 3. Environment file (strongly recommended)
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
 
-For any machine reachable beyond your LAN, set a long random `FUN_API_KEY` and require it at startup:
+### 5. Environment file `/etc/fun-aggregator.env`
+
+`Systemd` loads **`EnvironmentFile=-/etc/fun-aggregator.env`** (see `deploy/fun-aggregator.service`). Create it on the Pi:
 
 ```bash
 sudo install -m 600 /dev/null /etc/fun-aggregator.env
 sudo nano /etc/fun-aggregator.env
 ```
 
-Example:
+**Production-style example** (require API key; persist roster and specials outside the app tree):
 
 ```env
+# Required for FUN_REQUIRE_API_KEY=1
 FUN_API_KEY=<long random secret>
 FUN_REQUIRE_API_KEY=1
+
+# Earthquake + ISS background refresh (seconds)
 REFRESH_SECONDS=900
+
+# Fact harvest tick (seconds); cat + useless upstreams work out of the box (meowfacts + uselessfacts.jsph)
+FACT_REFRESH_SECONDS=400
+
+# Persist device roster and special-message queues (optional but recommended)
 FUN_DEVICE_STORE=/var/lib/fun-aggregator/devices.json
-# Optional: third-party fact APIs (see README "Upstream fact APIs")
-# FUN_CAT_UPSTREAM_URL=https://catfact.ninja/fact
-# FACT_REFRESH_SECONDS=400
-# Optional: targeted slides (see "Special messages" below)
-# FUN_ADMIN_API_KEY=<separate secret for POST /v1/admin/special>
-# FUN_SPECIAL_STORE=/var/lib/fun-aggregator/special_messages.json
+FUN_SPECIAL_STORE=/var/lib/fun-aggregator/special_messages.json
+
+# Optional: admin-only enqueue for targeted slides (must differ from FUN_API_KEY)
+# FUN_ADMIN_API_KEY=<separate long secret>
 ```
 
-Create the roster directory if you use a path under `/var/lib`:
+**Generate `FUN_API_KEY` (and a separate admin key if you use special messages).** Use a long, unpredictable value (aim for **≥32 random bytes** of entropy). On your laptop or the Pi you can run either:
+
+```bash
+openssl rand -hex 32
+```
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Copy the output into **`FUN_API_KEY=`** in `/etc/fun-aggregator.env`. If you enable **`FUN_ADMIN_API_KEY`**, run the command again and paste a **different** value—never reuse the device/fun key for admin routes.
+
+**Firmware: where to put the same secret before you flash.** The ESP32 sends **`X-Fun-Key`** on fun endpoints. That string is **compiled into the firmware** here (path from the **`e-ink_code`** project root):
+
+`firmware/core/hardware_config.h`
+
+- **`FUN_FACTS_BASE_URL`** — aggregator base URL (no trailing slash), e.g. `http://192.168.1.10:8080`.
+- **`FUN_FACTS_API_KEY`** — must **exactly match** the server’s **`FUN_API_KEY`**. Use `""` (empty) only if the Pi does **not** set `FUN_API_KEY` (typical LAN-only testing).
+
+Example:
+
+```cpp
+#define FUN_FACTS_BASE_URL "http://192.168.1.10:8080"
+#define FUN_FACTS_API_KEY "paste_the_same_secret_as_FUN_API_KEY_here"
+```
+
+Prefer secrets that are **hex** or **URL-safe** so you do not have to escape quotes or backslashes inside the C macro. After changing these defines, **rebuild and upload** the firmware (e.g. PlatformIO **Upload** on the `e-ink_code` project) so the chip runs the new key.
+
+**LAN-only lab example** (no API key; not for exposure beyond your home):
+
+```env
+REFRESH_SECONDS=900
+FACT_REFRESH_SECONDS=400
+```
+
+With **no** `FUN_FACT_SOURCES_JSON`, the server still harvests **cat** and **useless** facts using built-in URLs (see table below). **Earthquake** and **ISS** data come from USGS and Where The ISS At inside `refresh.py`; no extra env is required.
+
+Create `/var/lib/fun-aggregator` if you pointed stores there:
 
 ```bash
 sudo mkdir -p /var/lib/fun-aggregator
 sudo chown pi:pi /var/lib/fun-aggregator
 ```
 
-Optional tuning (defaults are fine for a few displays):
+Replace **`pi`** with your service user if different.
 
-- `FUN_RATE_LIMIT_SCREEN` — default `60/minute`
-- `FUN_RATE_LIMIT_BATCH` — default `40/minute`
-
-**Upstream fact APIs (optional).** If set, the server periodically fetches JSON from public fact APIs and merges lines into `data/cat_facts.json`, `data/useless_facts.json`, and/or `data/fun_facts.json` (FIFO cap, default **30** lines per pool). Devices still only call *your* `/v1/fun/…` endpoints.
+**Upstream fact APIs (optional overrides).** Harvested lines are appended to `data/cat_facts.json`, `data/useless_facts.json`, and optionally `data/fun_facts.json` under **`WorkingDirectory`** (FIFO cap, default **30** lines per pool). The ESP32 only talks to **your** `/v1/fun/…` endpoints.
 
 | Variable | Meaning |
 |----------|---------|
-| `FUN_CAT_UPSTREAM_URL`, `FUN_USELESS_UPSTREAM_URL`, `FUN_FUN_UPSTREAM_URL` | GET URL per category (`fun` writes `fun_facts.json`). |
-| `FUN_CAT_JSON_PATH`, `FUN_USELESS_JSON_PATH`, `FUN_FUN_JSON_PATH` | Optional dot-separated path to the fact string (e.g. `data`). If unset, common keys `fact`, `text`, `data` are tried. |
-| `FUN_FACT_SOURCES_JSON` | Alternative: JSON array of `{"pool": "cat_facts", "url": "...", "json_path": "..."}`. |
-| `FACT_REFRESH_SECONDS` | Seconds between scheduler ticks (default **400**). With round-robin, each pool is fetched about every `FACT_REFRESH_SECONDS × (number of pools)`. |
-| `FACT_ROUND_ROBIN` | Default **on** (`1`): one pool per tick. Set `0` to fetch every configured URL each tick. |
-| `FACT_POOL_MAX_LINES` | Max stored lines per pool (default **30**); oldest removed when a new unique line is added. |
-| `FACT_FETCHES_PER_SOURCE_PER_CYCLE` | Sequential GETs per pool per tick (default **1**). |
-| `FACT_INTER_SOURCE_DELAY_SECONDS` | Delay between those GETs (default **1.5**). |
+| `FUN_CAT_UPSTREAM_URL`, `FUN_USELESS_UPSTREAM_URL`, `FUN_FUN_UPSTREAM_URL` | Override GET URLs. If unset and `FUN_FACT_SOURCES_JSON` is not used, **cat** defaults to `https://meowfacts.herokuapp.com/` and **useless** to `https://uselessfacts.jsph.pl/api/v2/facts/random?language=en`. |
+| `FUN_CAT_JSON_PATH`, `FUN_USELESS_JSON_PATH`, `FUN_FUN_JSON_PATH` | Optional dot-separated path to the fact string. If unset, keys such as `fact`, `text`, and `data` (including `data` as a string array) are handled. |
+| `FUN_FACT_SOURCES_JSON` | Alternative: JSON array of `{"pool": "cat_facts", "url": "...", "json_path": "..."}`. When set, it **replaces** the env mapping above for harvest configuration. |
+| `FACT_REFRESH_SECONDS` | Seconds between harvest ticks (default **400**). |
+| `FACT_ROUND_ROBIN` | Default **on** (`1`): one pool per tick. Set `0` to hit every configured URL each tick. |
+| `FACT_POOL_MAX_LINES` | Max lines per pool (default **30**). |
+| `FACT_FETCHES_PER_SOURCE_PER_CYCLE`, `FACT_INTER_SOURCE_DELAY_SECONDS` | Burst and delay between sequential GETs per pool. |
 | `FACT_UPSTREAM_USER_AGENT`, `FACT_UPSTREAM_TIMEOUT_SECONDS`, `FACT_MAX_FACT_CHARS` | Optional HTTP tuning. |
+| `FUN_RATE_LIMIT_SCREEN`, `FUN_RATE_LIMIT_BATCH` | SlowAPI limits (defaults `60/minute` and `40/minute`). |
 
-See comments at the top of `fun_aggregator/deploy/fun-aggregator.service` for a full list.
+Additional variables are documented in `fun_aggregator/deploy/fun-aggregator.service` comments and in `main.py`’s module docstring.
 
-### 4. systemd service
+### 6. Verify outbound APIs (before or after systemd)
+
+The script **`smoke_fact_upstreams.py`** uses the same URL configuration as the running app and performs live HTTP checks (fact harvest sources plus USGS and ISS feeds used for earthquake/ISS slides):
+
+```bash
+cd /opt/fun-aggregator
+set -a
+[ -f /etc/fun-aggregator.env ] && . /etc/fun-aggregator.env
+set +a
+.venv/bin/python smoke_fact_upstreams.py
+```
+
+Run this after step 5 so custom `FUN_*` URLs are picked up. Exit code **0** means every probe returned usable JSON—you can run it again any time you change env or network.
+
+### 7. Install and start systemd
 
 ```bash
 sudo cp /opt/fun-aggregator/deploy/fun-aggregator.service /etc/systemd/system/
-# Edit User= and paths if needed:
-# sudo nano /etc/systemd/system/fun-aggregator.service
+```
+
+Edit the unit if needed (service user, paths):
+
+```bash
+sudo nano /etc/systemd/system/fun-aggregator.service
+```
+
+Enable and start:
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now fun-aggregator
 sudo systemctl status fun-aggregator
 ```
 
-Smoke test on the Pi:
+Logs:
+
+```bash
+journalctl -u fun-aggregator -e -f
+```
+
+Firewall (only if you use `ufw` and clients reach the Pi on **8080**):
+
+```bash
+sudo ufw allow 8080/tcp
+sudo ufw reload
+```
+
+### 8. Smoke-test the running service
+
+On the **Pi**:
 
 ```bash
 curl -s http://127.0.0.1:8080/healthz
 ```
 
-### 5. Point the firmware at the Pi
+If **`FUN_API_KEY`** is set:
 
-In `firmware/core/hardware_config.h`, set `FUN_FACTS_BASE_URL` to the URL the ESP can actually reach, e.g. `http://192.168.1.10:8080` on your LAN. If `FUN_API_KEY` is set on the server, set `FUN_FACTS_API_KEY` in the firmware to the same value.
+```bash
+curl -s -H "X-Fun-Key: YOUR_KEY" "http://127.0.0.1:8080/v1/fun/screen?m=1"
+```
 
-For **HTTPS** to a hostname with a public CA, the firmware can use `https://…` and a pinned/root CA as documented in that header file.
+After the first **fact harvest** cycles, cat/useless slides should work from pools; **`503`** on a mode usually means empty pool or USGS/ISS not yet refreshed—wait a short time or check outbound internet (`smoke_fact_upstreams.py`).
+
+### 9. Point the ESP32 at the Pi
+
+Set **`FUN_FACTS_BASE_URL`** and **`FUN_FACTS_API_KEY`** in `firmware/core/hardware_config.h` (see **step 5** for generating the key and matching it to **`FUN_API_KEY`**). Rebuild and flash after any change.
+
+For **HTTPS** with a well-known CA, configure the firmware as described in that header (root CA / pinning). Self-signed certs on the Pi are awkward on ESP32 unless you embed a matching trust anchor.
+
+### 10. Updating the app after code changes
+
+On your dev machine, **rsync** again (step 3), then on the **Pi**:
+
+```bash
+cd /opt/fun-aggregator
+.venv/bin/pip install -r requirements.txt
+sudo systemctl restart fun-aggregator
+```
 
 ---
 
@@ -192,6 +303,7 @@ If the public URL uses HTTPS with a standard CA certificate, configure the firmw
 
 - **`401` on fun endpoints:** `X-Fun-Key` missing or wrong; align firmware `FUN_FACTS_API_KEY` with server `FUN_API_KEY`.
 - **Service exits immediately:** with `FUN_REQUIRE_API_KEY=1`, ensure `FUN_API_KEY` is set in `/etc/fun-aggregator.env`.
-- **`503` on `/v1/fun/screen`:** upstream sources not warmed yet; wait for the background refresh or check Pi outbound internet (firewall/DNS).
+- **`503` on `/v1/fun/screen`:** USGS/ISS not warmed yet, or fact pools empty—wait for refresh/harvest, check Pi outbound DNS/firewall, and run `smoke_fact_upstreams.py` from `/opt/fun-aggregator`.
+- **Upstream / harvest issues:** `journalctl -u fun-aggregator -e` and `.venv/bin/python smoke_fact_upstreams.py` (load `/etc/fun-aggregator.env` first, as in the Raspberry Pi checklist step 6).
 
 For endpoint and header details, see the module docstring at the top of `fun_aggregator/main.py`.
