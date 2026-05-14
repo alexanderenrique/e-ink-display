@@ -50,4 +50,4 @@ def describe_nearest_place(lat: float, lon: float) -> str:
     dist_mi = best_km * 0.621371
     if best_km < _NEAR_THRESHOLD_KM:
         return f"Roughly near: {best_label}"
-    return f"Closest listed: {best_label} (~{dist_mi:.0f} mi)"
+        return f"~{dist_mi:.0f} miles from {best_label}"

@@ -199,6 +199,28 @@ BLE provisioning stores a top-level `apis` object that [`main.cpp`](main.cpp) me
 
 **Device identity (aggregator / special messages):** In top-level provisioning JSON you can send a human-readable label (any of `displayName`, `deviceFriendlyName`, or `friendly_name`) which is persisted as `deviceFriendlyName` in Preferences and sent on each aggregator request as the `X-Device-Name` header. Optionally include `deviceId` / `device_id` (UUID) if you mint the ID in the provisioning app (**phone-mint**); otherwise NVS keeps `deviceId` empty until the firmware calls `POST /v1/devices/register` once (server-mint UUID), then repeats that id as `X-Device-Id` on later calls. To queue a one-off slide for a given UUID (or a named group), use the server admin API documented in [server README — Special messages](../server/README.md#special-messages-targeted-slides).
 
+**Special messages — did the server / device accept it?**
+
+- **Enqueue accepted (admin):** A successful `POST /v1/admin/special` returns HTTP **200** with JSON like `{"ok":true,"enqueued_for":["…uuid…"],"unknown_groups":[]}` — **`enqueued_for`** is the definitive list of device UUIDs that received a queued copy. If **`ok`** is **`false`**, read **`error`**; **`unknown_groups`** means one or more **`group_ids`** were not defined in the on-disk store yet (define them with **`groups`** in the same request, or persist them beforehand — see below).
+- **Still waiting vs. consumed (device):** There is **no separate HTTP endpoint** for delivery receipts. Pending items live in the server file **`FUN_SPECIAL_STORE`** (default `data/special_messages.json`; often **`/var/lib/fun-aggregator/special_messages.json`** on a Pi — see server README). It is structured as **`queues`** (per-device UUID FIFO arrays) and **`groups`** (named lists of UUIDs). After enqueue, **`queues.<device-uuid>`** holds pending slide objects until the firmware’s next successful **`GET /v1/fun/special`**; that POP **removes** the head entry and returns the slide, so seeing the slide on the ink display is the strongest proof the device consumed it. Inspect the JSON on the Pi (or `jq '.queues."YOUR-DEVICE-UUID"' /path/to/special_messages.json`) to see what is **still queued**; **`204`** on **`/v1/fun/special`** means nothing left for that UUID. Firmware serial output logs HTTP/JSON failures for **`/v1/fun/special`** (see `[FunFetch] Special slide …`); a clean fetch does not spam success logs — use the screen or the store file.
+
+**Special messages — grouping UUIDs**
+
+Named groups are **server-side strings** pointing at **lists of device UUID strings** in **`FUN_SPECIAL_STORE.groups`**. Typical workflow from your laptop against the public API (same pattern on the Pi with `http://127.0.0.1:8081`):
+
+1. **Define or update a group** and **enqueue in one request** — the **`groups`** object is merged **before** **`group_ids`** is resolved for that POST:
+
+```bash
+curl -sS -X POST 'https://YOUR-HOST/v1/admin/special' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Fun-Admin-Key: YOUR_ADMIN_SECRET' \
+  -d '{"text":"Hi everyone","group_ids":["book_club"],"groups":{"book_club":["uuid-1-here","uuid-2-here"]}}'
+```
+
+2. **Later posts** can reference **`group_ids":["book_club"]`** alone if that group already exists in the JSON file — or supply **`groups`** again to replace the membership (the server **replaces** the list for that name when **`groups`** is present; an **empty array** **`"groups":{"book_club":[]}`** **removes** that group mapping).
+
+You can combine **`device_ids`** and **`group_ids`** in the same body; duplicates are merged. Full curl examples and env vars (**`FUN_ADMIN_API_KEY`**, **`FUN_SPECIAL_STORE`**) are in [server README — Special messages](../server/README.md#special-messages-targeted-slides).
+
 **Dependencies:** SHT31 sensor (I2C), WiFi for API calls
 
 ### Sensor App (`apps/sensor/`)

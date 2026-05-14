@@ -1,5 +1,5 @@
 """
-Fun facts aggregator API. Run: uvicorn main:app --host 0.0.0.0 --port 8080
+Fun facts aggregator API. Run: uvicorn main:app --host 0.0.0.0 --port 8081
 (Use the venv's uvicorn on Raspberry Pi under systemd — see deploy/fun-aggregator.service.)
 
 Environment (often /etc/fun-aggregator.env): FUN_API_KEY (shared secret header X-Fun-Key),

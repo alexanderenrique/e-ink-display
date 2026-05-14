@@ -12,3 +12,5 @@ secure_boot_signing_key.pem
 # Local / internal docs (not distributed)
 FLASH_INSTRUCTIONS.md
 PLATFORMIO_CLI_CHEATSHEET.md
+
+firmware/core/hardware_config.h

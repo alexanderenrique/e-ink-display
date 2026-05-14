@@ -4,8 +4,10 @@
 #include <Adafruit_SHT31.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <time.h>
+#include <cstring>
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
@@ -46,6 +48,25 @@ namespace {
 
 constexpr size_t kMaxFriendlyChars = 160;
 
+/** Begin HTTP(S) for fun API. When @p tls is non-null, it must outlive @p http until http.end(). */
+static bool beginFunHttp(HTTPClient& http, const String& url, WiFiClientSecure* tls) {
+    if (url.startsWith("https://")) {
+        if (tls == nullptr) {
+            return false;
+        }
+        const char* ca = ROOT_CA_CERT;
+        if (std::strstr(ca, "YOUR_ROOT_CA_CERTIFICATE_HERE") != nullptr || std::strlen(ca) < 120) {
+            Serial.println(
+                "[FunFetch] TLS: ROOT_CA_CERT not set; using setInsecure() — paste your CA PEM for production");
+            tls->setInsecure();
+        } else {
+            tls->setCACert(ca);
+        }
+        return http.begin(*tls, url);
+    }
+    return http.begin(url);
+}
+
 /** Obtain server-assigned device_id when NVS slot is empty; phone-mint id skips POST. */
 static bool ensureRegisteredWithFunServer() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -71,7 +92,8 @@ static bool ensureRegisteredWithFunServer() {
     bodyDoc["hardware_mac"] = WiFi.macAddress();
 
     HTTPClient http;
-    if (!http.begin(url)) {
+    WiFiClientSecure tls;
+    if (!beginFunHttp(http, url, &tls)) {
         Serial.println("[FunFetch] register: http.begin failed");
         return false;
     }
@@ -198,8 +220,9 @@ bool fetchFunScreenSlide(int mode, FunSlide& out) {
     ensureRegisteredWithFunServer();
 
     HTTPClient http;
+    WiFiClientSecure tls;
     String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/screen?m=" + String(mode);
-    if (!http.begin(url)) {
+    if (!beginFunHttp(http, url, &tls)) {
         return false;
     }
     addFunHeaders(http);
@@ -233,8 +256,9 @@ bool fetchMixedFunSlide(FunSlide& out) {
     ensureRegisteredWithFunServer();
 
     HTTPClient http;
+    WiFiClientSecure tls;
     String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/facts/mixed?count=1";
-    if (!http.begin(url)) {
+    if (!beginFunHttp(http, url, &tls)) {
         return false;
     }
     addFunHeaders(http);
@@ -276,8 +300,9 @@ bool fetchSpecialSlide(FunSlide& out) {
     }
 
     HTTPClient http;
+    WiFiClientSecure tls;
     String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/special";
-    if (!http.begin(url)) {
+    if (!beginFunHttp(http, url, &tls)) {
         return false;
     }
     addFunHeaders(http);

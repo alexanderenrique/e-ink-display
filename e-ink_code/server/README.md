@@ -8,7 +8,7 @@ This folder is the right place to run the API—on a **Raspberry Pi at home**, o
 
 ## Raspberry Pi (step-by-step)
 
-Use this checklist to run the aggregator on **Raspberry Pi OS** (or another Debian-based Pi image). The HTTP server listens on **port 8080** by default. The **systemd** unit uses **`WorkingDirectory=/opt/fun-aggregator`**, so pool files and default `data/*.json` paths live next to the app unless you override env vars.
+Use this checklist to run the aggregator on **Raspberry Pi OS** (or another Debian-based Pi image). On the Pi, **uvicorn binds `0.0.0.0:8081`**—the fun API is **always on port 8081** here unless you change `fun-aggregator.service`. The **systemd** unit uses **`WorkingDirectory=/opt/fun-aggregator`**, so pool files and default `data/*.json` paths live next to the app unless you override env vars.
 
 ### 1. Prerequisites
 
@@ -103,13 +103,20 @@ Copy the output into **`FUN_API_KEY=`** in `/etc/fun-aggregator.env`. If you ena
 
 `firmware/core/hardware_config.h`
 
-- **`FUN_FACTS_BASE_URL`** — aggregator base URL (no trailing slash), e.g. `http://192.168.1.10:8080`.
+- **`FUN_FACTS_BASE_URL`** — aggregator base URL (no trailing slash). Examples: LAN **`http://192.168.1.10:8081`** (Pi’s address on your Wi‑Fi), or public **`https://fun-api.denton.works`** when the Pi is behind a Cloudflare Tunnel (HTTPS URL has **no port**; Cloudflare forwards to **`127.0.0.1:8081`** on the Pi).
 - **`FUN_FACTS_API_KEY`** — must **exactly match** the server’s **`FUN_API_KEY`**. Use `""` (empty) only if the Pi does **not** set `FUN_API_KEY` (typical LAN-only testing).
 
-Example:
+Example (same Wi‑Fi as the Pi):
 
 ```cpp
-#define FUN_FACTS_BASE_URL "http://192.168.1.10:8080"
+#define FUN_FACTS_BASE_URL "http://192.168.1.10:8081"
+#define FUN_FACTS_API_KEY "paste_the_same_secret_as_FUN_API_KEY_here"
+```
+
+Example (public hostname; site **denton.works**, API subdomain **`fun-api`**):
+
+```cpp
+#define FUN_FACTS_BASE_URL "https://fun-api.denton.works"
 #define FUN_FACTS_API_KEY "paste_the_same_secret_as_FUN_API_KEY_here"
 ```
 
@@ -169,6 +176,12 @@ Run this after step 5 so custom `FUN_*` URLs are picked up. Exit code **0** mean
 sudo cp /opt/fun-aggregator/deploy/fun-aggregator.service /etc/systemd/system/
 ```
 
+If you run from a repo checkout (for example `/opt/e-ink-display/e-ink_code`), use `server/fun_aggregator/deploy/fun-aggregator.service` — directory name is **`fun_aggregator`** with an underscore:
+
+```bash
+sudo cp /opt/e-ink-display/e-ink_code/server/fun_aggregator/deploy/fun-aggregator.service /etc/systemd/system/
+```
+
 Edit the unit if needed (service user, paths):
 
 ```bash
@@ -189,10 +202,10 @@ Logs:
 journalctl -u fun-aggregator -e -f
 ```
 
-Firewall (only if you use `ufw` and clients reach the Pi on **8080**):
+Firewall (only if you use `ufw` and clients reach the Pi on **8081**):
 
 ```bash
-sudo ufw allow 8080/tcp
+sudo ufw allow 8081/tcp
 sudo ufw reload
 ```
 
@@ -201,13 +214,13 @@ sudo ufw reload
 On the **Pi**:
 
 ```bash
-curl -s http://127.0.0.1:8080/healthz
+curl -s http://127.0.0.1:8081/healthz
 ```
 
 If **`FUN_API_KEY`** is set:
 
 ```bash
-curl -s -H "X-Fun-Key: YOUR_KEY" "http://127.0.0.1:8080/v1/fun/screen?m=1"
+curl -s -H "X-Fun-Key: YOUR_KEY" "http://127.0.0.1:8081/v1/fun/screen?m=1"
 ```
 
 After the first **fact harvest** cycles, cat/useless slides should work from pools; **`503`** on a mode usually means empty pool or USGS/ISS not yet refreshed—wait a short time or check outbound internet (`smoke_fact_upstreams.py`).
@@ -230,6 +243,94 @@ sudo systemctl restart fun-aggregator
 
 ---
 
+## Serving the API on your website (next steps)
+
+This project’s Pi deployment serves the app on **`http://<pi>:8081`** (see steps 7–8). Once it is healthy on the Pi’s **port 8081**, anything on the public internet—your **ESP32** or **JavaScript on a webpage**—needs a **stable HTTPS URL** that reaches that same process on the Pi.
+
+**Copy-paste reference (denton.works):**
+
+| What | Value |
+|------|--------|
+| **Site / zone** | `denton.works` |
+| **Suggested API hostname** | `fun-api.denton.works` |
+| **Pi (local)** | `http://127.0.0.1:8081` on the Raspberry Pi running `fun-aggregator` |
+
+If your **DNS is already on Cloudflare** and you have used **Cloudflare Tunnel** before, add one **public hostname** for this API (below). That avoids opening ports on your home router while still giving you `https://…` with a normal certificate chain for the ESP32.
+
+### 1. Choose a public URL
+
+- **Subdomain** (recommended with Tunnel): `https://fun-api.denton.works` → tunnel to **`http://127.0.0.1:8081`** on the machine running `cloudflared` (usually the **same Raspberry Pi** that runs systemd + uvicorn on port **8081**).
+- **Path on your main site**: `https://denton.works/fun/…` needs either **Cloudflare Workers** / **origin rules** / a reverse proxy you control to forward `/fun` to the Pi’s **:8081**, or use a subdomain (simpler).
+
+The firmware’s **`FUN_FACTS_BASE_URL`** is that **public base URL** (no trailing slash). Paths must still map unchanged: requests to `https://fun-api.denton.works/v1/fun/…` must reach uvicorn on the Pi as `/v1/fun/…` (the default one-hostname Tunnel rule does this).
+
+### 2. Cloudflare Tunnel checklist (API on the Pi)
+
+**Public hostname** (Zero Trust → **Networks** → **Tunnels** → your tunnel → **Configure** → **Public Hostname**):
+
+| Field | Typical value |
+|--------|----------------|
+| **Subdomain** | `fun-api` |
+| **Domain** | `denton.works` (your Cloudflare zone) |
+| **Service type** | **HTTP** |
+| **URL** | `http://127.0.0.1:8081` ← Raspberry Pi **port 8081** (uvicorn) |
+
+Install and run **`cloudflared`** on the **same Raspberry Pi** as `fun-aggregator` so **`127.0.0.1:8081`** is the systemd uvicorn from step 7. If the tunnel runs elsewhere, set **URL** to the Pi’s address **as seen from that host** (for example `http://192.168.1.10:8081` on your LAN)—only do that if you understand the trust boundary.
+
+**DNS:** Saving the public hostname creates the **proxied** DNS record for you (orange cloud). No A record to your home IP is required.
+
+**Cloudflare Access:** Do **not** put an Access policy on this hostname if the **ESP32** must use it. The firmware sends **`X-Fun-Key`** only; it cannot complete an OAuth or browser login. Use Access on a **different** hostname for human-only tools, or keep the fun API publicly reachable at the edge and rely on **`FUN_API_KEY`** (and rate limits) like any other bearer-style API.
+
+**TLS:** Client ↔ Cloudflare is HTTPS; Cloudflare ↔ `cloudflared` is encrypted on the tunnel; your app stays HTTP on localhost. That matches how most people run FastAPI behind Tunnel.
+
+Reference: [Cloudflare Tunnel documentation](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/).
+
+**Not using Tunnel:** Run the same app on a **VPS** with nginx/Caddy on **443** (README section *Using a VPS or PaaS*), or use **Tailscale** if you only need private reachability (awkward for a public website without extra plumbing).
+
+### 3. If your “website” is a browser app (JavaScript)
+
+- **Do not** put **`FUN_API_KEY`** in frontend code or public repos. Anyone can copy it and hit your API.
+- Prefer a **server-side** call: your Next.js/Express/PHP host calls the Pi service on **`http://…:8081`** (or your internal hostname) with **`X-Fun-Key`** from an env var, and the browser only talks to **your** site.
+- If the browser must call the API **host directly** (e.g. `fun-api.denton.works`), the browser will enforce **CORS**; this repo’s FastAPI app does not add CORS headers today. Easiest fixes: **proxy** under your main domain (step 1, path prefix) or add **`CORSMiddleware`** in `main.py` for specific origins only.
+
+### 4. Reverse proxy sketch (your own TLS or VPS)
+
+**nginx** (conceptually): terminate TLS on 443, forward to the app.
+
+```nginx
+server {
+  server_name fun-api.denton.works;
+  location / {
+    proxy_pass http://127.0.0.1:8081;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+If the proxy runs on a **different machine** than the Pi, `proxy_pass` targets the Pi’s **reachable** address and **port 8081** (tailnet IP, internal VPC IP, or `127.0.0.1:8081` only when the app is local to that host).
+
+### 5. Point the firmware at the public URL
+
+In `firmware/core/hardware_config.h`, set **`FUN_FACTS_BASE_URL`** to **`https://fun-api.denton.works`** (or your chosen hostname) and keep **`FUN_FACTS_API_KEY`** in sync with **`FUN_API_KEY`**. Rebuild and flash. For ESP32 TLS with a normal CA-issued certificate (Let’s Encrypt or Cloudflare), follow the notes in that header.
+
+### 6. Verify from your laptop
+
+```bash
+curl -sS "https://fun-api.denton.works/healthz"
+curl -sS -H "X-Fun-Key: YOUR_KEY" "https://fun-api.denton.works/v1/fun/screen?m=1"
+```
+
+On the **Pi only** (same checks, port **8081**):
+
+```bash
+curl -sS "http://127.0.0.1:8081/healthz"
+curl -sS -H "X-Fun-Key: YOUR_KEY" "http://127.0.0.1:8081/v1/fun/screen?m=1"
+```
+
+---
+
 ## Special messages (targeted slides)
 
 You can queue a custom slide per device UUID (FIFO). Each fun-app wake (when **`apis.special_messages`** is enabled on the ESP32, the default) issues **`GET /v1/fun/special`** with the same **`X-Fun-Key`** and **`X-Device-Id`** as other fun endpoints; if a message is waiting, the server returns **`FunSlide` JSON** and **removes** that message from the queue; otherwise it returns **`204 No Content`**. The firmware does **not** call the admin route.
@@ -241,21 +342,30 @@ You can queue a custom slide per device UUID (FIFO). Each fun-app wake (when **`
 
 Look up recipient UUIDs in **`FUN_DEVICE_STORE`** (the device roster, often `devices.json`) or from the friend’s BLE provisioning.
 
-**Enqueue for one device**
+**Enqueue for one device** (public API; replace **`YOUR_ADMIN_SECRET`** and the placeholder UUID):
 
 ```bash
-curl -sS -X POST 'http://your-host:8080/v1/admin/special' \
+curl -sS -X POST 'https://fun-api.denton.works/v1/admin/special' \
   -H 'Content-Type: application/json' \
   -H 'X-Fun-Admin-Key: YOUR_ADMIN_SECRET' \
   -d '{"text":"Happy birthday!","device_ids":["00000000-0000-0000-0000-000000000000"]}'
 ```
 
-Replace the host/port, **`YOUR_ADMIN_SECRET`**, and the placeholder UUID with real values.
+**From the Raspberry Pi only** (uvicorn on **port 8081**):
+
+```bash
+curl -sS -X POST 'http://127.0.0.1:8081/v1/admin/special' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Fun-Admin-Key: YOUR_ADMIN_SECRET' \
+  -d '{"text":"Happy birthday!","device_ids":["00000000-0000-0000-0000-000000000000"]}'
+```
+
+Replace **`YOUR_ADMIN_SECRET`** and the placeholder UUID with real values.
 
 **Enqueue for a named group** (optional **`groups`** map merges members into the store before **`group_ids`** is resolved in the same request):
 
 ```bash
-curl -sS -X POST 'http://your-host:8080/v1/admin/special' \
+curl -sS -X POST 'https://fun-api.denton.works/v1/admin/special' \
   -H 'Content-Type: application/json' \
   -H 'X-Fun-Admin-Key: YOUR_ADMIN_SECRET' \
   -d '{"text":"Hello book club!","group_ids":["book_club"],"groups":{"book_club":["<uuid-1>","<uuid-2>"]}}'
@@ -272,9 +382,9 @@ Keeping the Pi **private** (behind NAT, no port forwarding) is reasonable. The d
 | Approach | Idea |
 |----------|------|
 | **LAN only** | Pi has a private IP; ESP32 and Pi on the same Wi‑Fi. No internet exposure. Easiest for a single home network. |
-| **Cloudflare Tunnel (`cloudflared`)** | Pi (or any host) **outbound** connects to Cloudflare; you get a `https://something.yourdomain.com` URL with no inbound ports on the Pi. |
+| **Cloudflare Tunnel (`cloudflared`)** | Raspberry Pi **outbound** connects to Cloudflare; you get e.g. **`https://fun-api.denton.works`** with no inbound ports. Tunnel points at **`http://127.0.0.1:8081`** on the Pi. |
 | **Tailscale / WireGuard** | Pi and phone/laptop share a virtual LAN; ESP32 still needs a route—often you combine with a small VPS or run the API on a node the ESP can reach, or use LAN + Tailscale for *admin* only. |
-| **API on the cloud, Pi optional** | Run the **same** `fun_aggregator` app on a cheap VPS or container host; firmware uses `https://api.yourdomain.com` with `FUN_API_KEY`. The Pi is not required for the API (only if you want local hosting). |
+| **API on the cloud, Pi optional** | Run the **same** `fun_aggregator` app on a cheap VPS; firmware uses **`https://fun-api.denton.works`** (Tunnel) or another stable URL with `FUN_API_KEY`. The Pi is optional if you prefer hosting elsewhere. |
 | **Your existing website as front door** | Run the Python app on a **VPS** or **PaaS**, or keep it on the Pi but expose it only via **Tunnel** to your VPS/nginx **reverse proxy** (subdomain or path). Visitors never connect directly to the Pi’s public IP—because there isn’t one. |
 
 ### Using a VPS or PaaS (“cloud”)
@@ -284,10 +394,10 @@ The app is a normal **uvicorn** process:
 ```bash
 cd fun_aggregator
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-FUN_API_KEY=… FUN_REQUIRE_API_KEY=1 .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8080
+FUN_API_KEY=… FUN_REQUIRE_API_KEY=1 .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8081
 ```
 
-Put **nginx**, **Caddy**, or your host’s load balancer in front for TLS on **443**, and proxy to `127.0.0.1:8080`.
+Put **nginx**, **Caddy**, or your host’s load balancer in front for TLS on **443**, and proxy to `127.0.0.1:8081`.
 
 **Persistence:** device registration is stored in `FUN_DEVICE_STORE` (JSON on disk). On ephemeral platforms (some free containers), disk resets on redeploy—use a **mounted volume** or accept that the roster resets unless you add external storage.
 
@@ -301,6 +411,8 @@ If the public URL uses HTTPS with a standard CA certificate, configure the firmw
 
 ## Troubleshooting
 
+- **`status=217/USER` / service stuck activating:** `User=` in `fun-aggregator.service` does not exist on this Pi (many images no longer ship the **`pi`** account). Run `getent passwd pi`; if empty, set `User=` to your real account (see `/home`) or create a dedicated user, then `sudo systemctl daemon-reload && sudo systemctl restart fun-aggregator`. Ensure that user can read **`WorkingDirectory`** and the **`ExecStart`** `.venv` path (fix ownership with `chown -R`).
+- **`Exec format error` / exit **203** or missing `.venv`:** The shipped unit assumes **`WorkingDirectory=/opt/fun-aggregator`** and **`ExecStart=.../opt/fun-aggregator/.venv/bin/uvicorn`**. If you only created the venv under a repo path (for example **`…/server/fun_aggregator`**), edit **`WorkingDirectory`** and **`ExecStart`** in `/etc/systemd/system/fun-aggregator.service` to that directory and its `.venv`, then `daemon-reload` and restart.
 - **`401` on fun endpoints:** `X-Fun-Key` missing or wrong; align firmware `FUN_FACTS_API_KEY` with server `FUN_API_KEY`.
 - **Service exits immediately:** with `FUN_REQUIRE_API_KEY=1`, ensure `FUN_API_KEY` is set in `/etc/fun-aggregator.env`.
 - **`503` on `/v1/fun/screen`:** USGS/ISS not warmed yet, or fact pools empty—wait for refresh/harvest, check Pi outbound DNS/firewall, and run `smoke_fact_upstreams.py` from `/opt/fun-aggregator`.

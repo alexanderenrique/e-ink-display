@@ -1,3 +1,15 @@
+/*
+ * Example configuration — not used by the build until copied:
+ *
+ *   cp firmware/core/hardware_config.h.example firmware/core/hardware_config.h
+ *
+ * Then edit hardware_config.h (ignored by git). Required secrets / deployment:
+ *   - OTA_VERSION_CHECK_URL, OTA_PASSWORD, ROOT_CA_CERT for secure OTA.
+ *   - FUN_FACTS_BASE_URL and optionally FUN_FACTS_API_KEY for the fun app.
+ * Pin and battery constants below match the default ESP32-C3 + e-pink wiring;
+ * change only if your hardware differs.
+ */
+
 #ifndef HARDWARE_CONFIG_H
 #define HARDWARE_CONFIG_H
 
@@ -62,8 +74,8 @@
 "YOUR_ROOT_CA_CERTIFICATE_HERE\n" \
 "-----END CERTIFICATE-----\n"
 
-// Fun aggregator (Raspberry Pi). Use http://host:8080 for LAN HTTP or https:// with valid CA in ROOT_CA_CERT.
-#define FUN_FACTS_BASE_URL "http://192.168.1.10:8080"
+// Fun aggregator (Raspberry Pi). Use http://host:8081 for LAN HTTP or https:// with valid CA in ROOT_CA_CERT.
+#define FUN_FACTS_BASE_URL "https://fun-api.example.com"
 // Optional: must match server FUN_API_KEY if set; leave empty for open LAN
 #define FUN_FACTS_API_KEY ""
 
