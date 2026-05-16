@@ -1,6 +1,6 @@
 """
-Fun facts aggregator API. Run: uvicorn main:app --host 0.0.0.0 --port 8081
-(Use the venv's uvicorn on Raspberry Pi under systemd — see deploy/fun-aggregator.service.)
+Fun facts aggregator API. Run: .venv/bin/python run_server.py  (default 0.0.0.0:8081)
+(Production: systemd fun-aggregator.service — see deploy/fun-aggregator.service.)
 
 Environment (often /etc/fun-aggregator.env): FUN_API_KEY (shared secret header X-Fun-Key),
 FUN_REQUIRE_API_KEY=1 to fail startup without FUN_API_KEY, FUN_RATE_LIMIT_SCREEN and FUN_RATE_LIMIT_BATCH

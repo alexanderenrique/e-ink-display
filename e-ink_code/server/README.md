@@ -8,7 +8,7 @@ This folder is the right place to run the API—on a **Raspberry Pi at home**, o
 
 ## Raspberry Pi (step-by-step)
 
-Use this checklist to run the aggregator on **Raspberry Pi OS** (or another Debian-based Pi image). On the Pi, **uvicorn binds `0.0.0.0:8081`**—the fun API is **always on port 8081** here unless you change `fun-aggregator.service`. The **systemd** unit uses **`WorkingDirectory=/opt/fun-aggregator`**, so pool files and default `data/*.json` paths live next to the app unless you override env vars.
+Use this checklist to run the aggregator on **Raspberry Pi OS** (or another Debian-based Pi image). On the Pi, the fun API listens on **`0.0.0.0:8081`** by default (`run_server.py` / `FUN_LISTEN_PORT` in `fun-aggregator.service`). The shipped **systemd** unit uses a repo checkout at **`/opt/e-ink-display/e-ink_code/server/fun_aggregator`**; pool files and default `data/*.json` paths live there unless you override env vars.
 
 ### 1. Prerequisites
 
@@ -405,7 +405,7 @@ The app is a normal **uvicorn** process:
 ```bash
 cd fun_aggregator
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-FUN_API_KEY=… FUN_REQUIRE_API_KEY=1 .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8081
+FUN_API_KEY=… FUN_REQUIRE_API_KEY=1 .venv/bin/python run_server.py
 ```
 
 Put **nginx**, **Caddy**, or your host’s load balancer in front for TLS on **443**, and proxy to `127.0.0.1:8081`.
@@ -423,7 +423,7 @@ If the public URL uses HTTPS with a standard CA certificate, configure the firmw
 ## Troubleshooting
 
 - **`status=217/USER` / service stuck activating:** `User=` in `fun-aggregator.service` does not exist on this Pi (many images no longer ship the **`pi`** account). Run `getent passwd pi`; if empty, set `User=` to your real account (see `/home`) or create a dedicated user, then `sudo systemctl daemon-reload && sudo systemctl restart fun-aggregator`. Ensure that user can read **`WorkingDirectory`** and the **`ExecStart`** `.venv` path (fix ownership with `chown -R`).
-- **`Exec format error` / exit **203** or missing `.venv`:** The shipped unit assumes **`WorkingDirectory=/opt/fun-aggregator`** and **`ExecStart=.../opt/fun-aggregator/.venv/bin/uvicorn`**. If you only created the venv under a repo path (for example **`…/server/fun_aggregator`**), edit **`WorkingDirectory`** and **`ExecStart`** in `/etc/systemd/system/fun-aggregator.service` to that directory and its `.venv`, then `daemon-reload` and restart.
+- **`Exec format error` / exit **203** or missing `.venv`:** The shipped unit runs **`…/fun_aggregator/.venv/bin/python run_server.py`** from **`WorkingDirectory=/opt/e-ink-display/e-ink_code/server/fun_aggregator`**. Create the venv there (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`), or edit **`WorkingDirectory`** / **`ExecStart`** in `/etc/systemd/system/fun-aggregator.service` to match your install path, then `daemon-reload` and restart.
 - **`401` on fun endpoints:** `X-Fun-Key` missing or wrong; align firmware `FUN_FACTS_API_KEY` with server `FUN_API_KEY`.
 - **Service exits immediately:** with `FUN_REQUIRE_API_KEY=1`, ensure `FUN_API_KEY` is set in `/etc/fun-aggregator.env`.
 - **`503` on `/v1/fun/screen`:** USGS/ISS not warmed yet, or fact pools empty—wait for refresh/harvest, check Pi outbound DNS/firewall, and run `smoke_fact_upstreams.py` from `/opt/fun-aggregator`.

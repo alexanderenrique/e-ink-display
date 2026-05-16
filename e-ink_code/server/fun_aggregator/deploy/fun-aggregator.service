@@ -1,10 +1,13 @@
-# Install on Raspberry Pi:
+# Install on Raspberry Pi (repo checkout at /opt/e-ink-display):
 #   sudo apt install python3-venv
-#   sudo mkdir -p /opt/fun-aggregator && sudo chown $USER:$USER /opt/fun-aggregator
-#   rsync -a server/fun_aggregator/ /opt/fun-aggregator/
-#   cd /opt/fun-aggregator && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   cd /opt/e-ink-display/e-ink_code/server/fun_aggregator
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   .venv/bin/python run_server.py   # listens on 0.0.0.0:8081
 #   sudo cp deploy/fun-aggregator.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now fun-aggregator
+#
+# Alternate layout: rsync server/fun_aggregator/ to /opt/fun-aggregator/ and edit
+# WorkingDirectory + ExecStart below to /opt/fun-aggregator and its .venv.
 #
 # Optional env file (FUN_API_KEY strongly recommended for any network exposure):
 #
@@ -22,7 +25,7 @@
 #
 #   Optional upstream fact APIs (see server/README.md). Built-in defaults: meowfacts + uselessfacts.jsph
 #   when FUN_FACT_SOURCES_JSON is unset and per-URL env vars are empty.
-#   Live check: cd /opt/fun-aggregator && .venv/bin/python smoke_fact_upstreams.py
+#   Live check: cd /opt/e-ink-display/e-ink_code/server/fun_aggregator && .venv/bin/python smoke_fact_upstreams.py
 #
 # Example:
 #   sudo nano /etc/fun-aggregator.env
@@ -35,9 +38,12 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/fun-aggregator
+WorkingDirectory=/opt/e-ink-display/e-ink_code/server/fun_aggregator
 EnvironmentFile=-/etc/fun-aggregator.env
-ExecStart=/opt/fun-aggregator/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8080
+# Fun API listens on port 8081 (see run_server.py; override with FUN_LISTEN_PORT).
+Environment=FUN_LISTEN_HOST=0.0.0.0
+Environment=FUN_LISTEN_PORT=8081
+ExecStart=/opt/e-ink-display/e-ink_code/server/fun_aggregator/.venv/bin/python run_server.py
 Restart=on-failure
 RestartSec=5
 
