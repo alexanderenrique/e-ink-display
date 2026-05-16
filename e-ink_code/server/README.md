@@ -342,7 +342,18 @@ You can queue a custom slide per device UUID (FIFO). Each fun-app wake (when **`
 
 Look up recipient UUIDs in **`FUN_DEVICE_STORE`** (the device roster, often `devices.json`) or from the friend’s BLE provisioning.
 
-**Enqueue for one device** (public API; replace **`YOUR_ADMIN_SECRET`** and the placeholder UUID):
+**Enqueue for one device** (public API; replace **`YOUR_ADMIN_SECRET`** and the placeholder UUID).
+
+With **`layout`** omitted or **`default`**, the device shows the **first line in red** and the rest in black. Use **`header`** + **`body`** for a title and message, or a single **`text`** field (optionally with an embedded newline):
+
+```bash
+curl -sS -X POST 'https://fun-api.denton.works/v1/admin/special' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Fun-Admin-Key: YOUR_ADMIN_SECRET' \
+  -d '{"header":"Happy birthday!","body":"Hope your day is wonderful.","device_ids":["00000000-0000-0000-0000-000000000000"]}'
+```
+
+Legacy single-field enqueue still works:
 
 ```bash
 curl -sS -X POST 'https://fun-api.denton.works/v1/admin/special' \
@@ -371,7 +382,7 @@ curl -sS -X POST 'https://fun-api.denton.works/v1/admin/special' \
   -d '{"text":"Hello book club!","group_ids":["book_club"],"groups":{"book_club":["<uuid-1>","<uuid-2>"]}}'
 ```
 
-Optional JSON fields: **`layout`** (string, defaults to `default`), **`expires_at`** (ISO-8601 string; expired entries are dropped when consumed).
+Optional JSON fields: **`header`** / **`body`** (composed as `header` + newline + `body` for the default red/black layout), **`text`** (alternative to header/body), **`layout`** (string, defaults to `default`), **`expires_at`** (ISO-8601 string; expired entries are dropped when consumed).
 
 ---
 

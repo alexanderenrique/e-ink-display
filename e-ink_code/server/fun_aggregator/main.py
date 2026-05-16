@@ -31,7 +31,7 @@ from typing import Annotated, Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic.functional_validators import field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -92,7 +92,21 @@ class DeviceRegisterBody(BaseModel):
 class SpecialEnqueueBody(BaseModel):
     """Enqueue one special slide copy per resolved device UUID (FIFO per device)."""
 
-    text: str = Field(..., min_length=1, max_length=8000)
+    text: str | None = Field(
+        default=None,
+        max_length=8000,
+        description="Legacy single field; first line is shown in red when layout is default.",
+    )
+    header: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Red title line (default layout). Use with body for a header + message.",
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=7500,
+        description="Black body text below header (default layout).",
+    )
     layout: str | None = Field(default=None, max_length=64)
     device_ids: list[str] = Field(default_factory=list)
     group_ids: list[str] = Field(default_factory=list)
@@ -106,6 +120,21 @@ class SpecialEnqueueBody(BaseModel):
     @classmethod
     def _strip_devices(cls, v: list[str]) -> list[str]:
         return [x.strip() for x in v if isinstance(x, str) and x.strip()]
+
+    @model_validator(mode="after")
+    def _require_slide_content(self) -> SpecialEnqueueBody:
+        if special_messages.compose_slide_text(
+            text=self.text, header=self.header, body=self.body
+        ):
+            return self
+        raise ValueError("provide text, or header, or body, or header and body together")
+
+    def slide_text(self) -> str:
+        composed = special_messages.compose_slide_text(
+            text=self.text, header=self.header, body=self.body
+        )
+        assert composed is not None
+        return composed
 
 
 def _extract_x_fun_key(request: Request) -> str | None:
@@ -192,7 +221,7 @@ async def admin_enqueue_special(
     if body.groups:
         groups_update = {str(k): v for k, v in body.groups.items()}
     result = special_messages.enqueue(
-        body.text,
+        body.slide_text(),
         body.layout,
         body.device_ids,
         body.group_ids,

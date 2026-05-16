@@ -34,11 +34,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Must be an existing login user on this machine (`getent passwd pi`). Exit status 217/USER means User= is wrong or missing.
-User=pi
+User=root
 WorkingDirectory=/opt/fun-aggregator
 EnvironmentFile=-/etc/fun-aggregator.env
-ExecStart=/opt/fun-aggregator/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8081
+ExecStart=/opt/fun-aggregator/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5
 

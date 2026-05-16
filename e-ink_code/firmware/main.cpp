@@ -397,7 +397,7 @@ void setup() {
 }
 
 void loop() {
-    // Cold-start BLE: disable after 15 seconds or first connection
+    // Cold-start BLE: disable after window timeout or first connection
     coldStartBle.loop();
 
     // Check battery level before running app

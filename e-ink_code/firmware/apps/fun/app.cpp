@@ -79,6 +79,9 @@ void FunApp::loop() {
         displayMode = (displayMode + 1) % 5;
     }
 
+    Serial.printf("[FunApp] displayMode=%d (0=room, 1=quake, 2=cat/mixed, 3=ISS, 4=useless)\n",
+                  displayMode);
+
     if (displayMode == 0) {
         if (_wifi) {
             String wifiSSID = ColdStartBle::getStoredWiFiSSID();
@@ -150,9 +153,12 @@ void FunApp::loop() {
         }
 
         if (gotSlide && _display) {
+            Serial.printf("[FunApp] Rendering fun slide (%u chars, layout=%s)\n",
+                          static_cast<unsigned>(slide.text.length()), slide.layout.c_str());
             renderFunSlide(_display, slide, batteryPercent);
         } else {
-            Serial.println("WiFi or fetch unavailable, displaying room data...");
+            Serial.println(
+                "[FunApp] No slide from server (WiFi down, fetch failed, or mode 0); showing room data...");
             String roomData = getRoomData();
             if (_display) {
                 renderDefault(_display, roomData, batteryPercent);

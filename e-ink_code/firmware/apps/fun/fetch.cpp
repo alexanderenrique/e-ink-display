@@ -48,10 +48,27 @@ namespace {
 
 constexpr size_t kMaxFriendlyChars = 160;
 
+static void logFunHttpBody(const char* label, int httpCode, const String& payload) {
+    if (httpCode <= 0) {
+        Serial.printf("[FunFetch] %s: transport error (%s)\n", label,
+                      HTTPClient::errorToString(httpCode).c_str());
+        return;
+    }
+    Serial.printf("[FunFetch] %s: HTTP %d, body %u bytes\n", label, httpCode,
+                  static_cast<unsigned>(payload.length()));
+    if (payload.length() == 0) {
+        return;
+    }
+    const size_t preview = payload.length() > 220 ? 220 : payload.length();
+    Serial.printf("[FunFetch] %s body: %.*s%s\n", label, static_cast<int>(preview),
+                  payload.c_str(), payload.length() > preview ? "..." : "");
+}
+
 /** Begin HTTP(S) for fun API. When @p tls is non-null, it must outlive @p http until http.end(). */
 static bool beginFunHttp(HTTPClient& http, const String& url, WiFiClientSecure* tls) {
     if (url.startsWith("https://")) {
         if (tls == nullptr) {
+            Serial.println("[FunFetch] TLS: https URL but tls client is null");
             return false;
         }
         const char* ca = ROOT_CA_CERT;
@@ -60,11 +77,20 @@ static bool beginFunHttp(HTTPClient& http, const String& url, WiFiClientSecure* 
                 "[FunFetch] TLS: ROOT_CA_CERT not set; using setInsecure() — paste your CA PEM for production");
             tls->setInsecure();
         } else {
+            Serial.println("[FunFetch] TLS: verifying server with ROOT_CA_CERT");
             tls->setCACert(ca);
         }
-        return http.begin(*tls, url);
+        if (!http.begin(*tls, url)) {
+            Serial.printf("[FunFetch] http.begin(https) failed for %s\n", url.c_str());
+            return false;
+        }
+        return true;
     }
-    return http.begin(url);
+    if (!http.begin(url)) {
+        Serial.printf("[FunFetch] http.begin(http) failed for %s\n", url.c_str());
+        return false;
+    }
+    return true;
 }
 
 /** Obtain server-assigned device_id when NVS slot is empty; phone-mint id skips POST. */
@@ -75,10 +101,13 @@ static bool ensureRegisteredWithFunServer() {
 
     String deviceId = ColdStartBle::getStoredDeviceId();
     if (deviceId.length() > 0) {
+        Serial.printf("[FunFetch] register: skip (device_id in NVS, %u chars)\n",
+                      static_cast<unsigned>(deviceId.length()));
         return true;
     }
 
     String url = String(FUN_FACTS_BASE_URL) + "/v1/devices/register";
+    Serial.printf("[FunFetch] register: POST %s\n", url.c_str());
     DynamicJsonDocument bodyDoc(512);
     String friendly = ColdStartBle::getStoredFriendlyName();
     if (friendly.length() == 0) {
@@ -105,16 +134,18 @@ static bool ensureRegisteredWithFunServer() {
     String bodyStr;
     serializeJson(bodyDoc, bodyStr);
 
+    Serial.printf("[FunFetch] register: friendly_name=%s mac=%s\n", friendly.c_str(),
+                  WiFi.macAddress().c_str());
+
     int httpCode = http.POST(bodyStr);
     String payload = http.getString();
     http.end();
+    logFunHttpBody("register", httpCode, payload);
 
     if (httpCode <= 0) {
-        Serial.printf("[FunFetch] register HTTP failed: %s\n", http.errorToString(httpCode).c_str());
         return false;
     }
     if (httpCode != HTTP_CODE_OK) {
-        Serial.printf("[FunFetch] register HTTP status=%d body=%s\n", httpCode, payload.c_str());
         return false;
     }
     payload.trim();
@@ -138,7 +169,7 @@ static bool ensureRegisteredWithFunServer() {
     }
 
     ColdStartBle::putStoredDeviceId(String(newId));
-    Serial.println("[FunFetch] Registered with fun server");
+    Serial.printf("[FunFetch] Registered with fun server (device_id=%s)\n", newId);
     return true;
 }
 
@@ -217,31 +248,47 @@ bool fetchFunScreenSlide(int mode, FunSlide& out) {
         return false;
     }
 
-    ensureRegisteredWithFunServer();
+    if (!ensureRegisteredWithFunServer()) {
+        Serial.println("[FunFetch] screen: device registration failed");
+        return false;
+    }
 
     HTTPClient http;
     WiFiClientSecure tls;
     String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/screen?m=" + String(mode);
+    Serial.printf("[FunFetch] screen: GET %s\n", url.c_str());
     if (!beginFunHttp(http, url, &tls)) {
         return false;
     }
     addFunHeaders(http);
+    String did = ColdStartBle::getStoredDeviceId();
+    Serial.printf("[FunFetch] screen: X-Device-Id %s\n",
+                  did.length() > 0 ? did.c_str() : "(none)");
 
     int httpCode = http.GET();
     bool ok = false;
     if (httpCode > 0) {
         String payload = http.getString();
         payload.trim();
-        DynamicJsonDocument doc(4096);
-        DeserializationError error = deserializeJson(doc, payload);
-        if (!error && doc.is<JsonObject>()) {
-            ok = funSlideFromJson(doc.as<JsonObjectConst>(), out);
-        } else if (error) {
-            Serial.print("JSON parse error: ");
-            Serial.println(error.c_str());
+        logFunHttpBody("screen", httpCode, payload);
+        if (httpCode == HTTP_CODE_OK) {
+            DynamicJsonDocument doc(4096);
+            DeserializationError error = deserializeJson(doc, payload);
+            if (!error && doc.is<JsonObject>()) {
+                ok = funSlideFromJson(doc.as<JsonObjectConst>(), out);
+                if (!ok) {
+                    Serial.println("[FunFetch] screen: JSON ok but missing or empty text field");
+                } else {
+                    Serial.printf("[FunFetch] screen: ok, text %u chars, layout=%s\n",
+                                  static_cast<unsigned>(out.text.length()), out.layout.c_str());
+                }
+            } else if (error) {
+                Serial.print("[FunFetch] screen JSON error: ");
+                Serial.println(error.c_str());
+            }
         }
     } else {
-        Serial.printf("HTTP screen failed: %s\n", http.errorToString(httpCode).c_str());
+        logFunHttpBody("screen", httpCode, String());
     }
     http.end();
     return ok;
@@ -253,36 +300,42 @@ bool fetchMixedFunSlide(FunSlide& out) {
         return false;
     }
 
-    ensureRegisteredWithFunServer();
+    if (!ensureRegisteredWithFunServer()) {
+        Serial.println("[FunFetch] mixed: device registration failed");
+        return false;
+    }
 
     HTTPClient http;
     WiFiClientSecure tls;
     String url = String(FUN_FACTS_BASE_URL) + "/v1/fun/facts/mixed?count=1";
+    Serial.printf("[FunFetch] mixed: GET %s\n", url.c_str());
     if (!beginFunHttp(http, url, &tls)) {
         return false;
     }
     addFunHeaders(http);
 
     int httpCode = http.GET();
-    if (httpCode <= 0) {
-        Serial.printf("HTTP mixed facts failed: %s\n", http.errorToString(httpCode).c_str());
-        http.end();
-        return false;
-    }
-
     String payload = http.getString();
     http.end();
     payload.trim();
+    logFunHttpBody("mixed", httpCode, payload);
+
+    if (httpCode <= 0) {
+        return false;
+    }
+    if (httpCode != HTTP_CODE_OK) {
+        return false;
+    }
 
     DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, payload);
     if (error) {
-        Serial.print("Mixed facts JSON error: ");
+        Serial.print("[FunFetch] mixed JSON error: ");
         Serial.println(error.c_str());
         return false;
     }
     if (!doc.containsKey("facts") || !doc["facts"].is<JsonArray>() || doc["facts"].as<JsonArrayConst>().size() == 0) {
-        Serial.println("Mixed facts: empty or missing facts array");
+        Serial.println("[FunFetch] mixed: empty or missing facts array");
         return false;
     }
     JsonObjectConst first = doc["facts"][0].as<JsonObjectConst>();

@@ -105,6 +105,29 @@ def parse_expires_datetime(exp_raw: Any) -> datetime | None:
         return None
 
 
+def compose_slide_text(
+    *,
+    text: str | None = None,
+    header: str | None = None,
+    body: str | None = None,
+) -> str | None:
+    """
+    Build FunSlide ``text`` for the default layout (red first line, black body).
+
+    Prefer explicit ``header`` / ``body``; fall back to ``text`` (may already contain ``\\n``).
+    """
+    h = (header or "").strip()
+    b = (body or "").strip()
+    t = (text or "").strip()
+    if h or b:
+        if not h:
+            return b or None
+        if not b:
+            return h
+        return f"{h}\n{b}"
+    return t or None
+
+
 def _merge_groups(groups_update: dict[str, Any]) -> None:
     if not isinstance(groups_update, dict) or not groups_update:
         return
