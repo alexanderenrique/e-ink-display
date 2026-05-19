@@ -79,6 +79,8 @@ void FunApp::loop() {
         displayMode = (displayMode + 1) % 5;
     }
 
+    applySpecialHoldDisplayMode(displayMode);
+
     Serial.printf("[FunApp] displayMode=%d (0=room, 1=quake, 2=cat/mixed, 3=ISS, 4=useless)\n",
                   displayMode);
 
@@ -107,6 +109,7 @@ void FunApp::loop() {
     } else {
         FunSlide slide;
         bool gotSlide = false;
+        bool showedSpecial = false;
 
         if (_wifi) {
             String wifiSSID = ColdStartBle::getStoredWiFiSSID();
@@ -128,15 +131,17 @@ void FunApp::loop() {
                 syncFunClockForSpecialHold();
                 if (loadHeldSpecialSlide(slide)) {
                     gotSlide = true;
+                    showedSpecial = true;
                 }
             }
 
             bool gotViaSpecial =
                 (!gotSlide && _apiSpecialMessages && displayMode >= 1 && displayMode <= 4 &&
-                 (fetchSpecialSlide(slide)));  // skips normal fetch if server had a queued slide
+                 (fetchSpecialSlide(slide, displayMode)));  // skips normal fetch if server had a queued slide
 
             if (gotViaSpecial) {
                 gotSlide = true;
+                showedSpecial = true;
             } else if (!gotSlide && displayMode == 1) {
                 gotSlide = fetchFunScreenSlide(1, slide);
             } else if (!gotSlide && displayMode == 2) {
@@ -168,6 +173,10 @@ void FunApp::loop() {
         if (_wifi) {
             _wifi->disconnect();
         }
+
+        if (showedSpecial) {
+            consumeSpecialHoldCycle();
+        }
     }
 
     Wire.end();
@@ -177,7 +186,9 @@ void FunApp::loop() {
         _display->disableSPI();
     }
 
-    cycleDisplayMode();
+    if (specialHoldRefreshCyclesRemaining() == 0) {
+        cycleDisplayMode();
+    }
 
     if (_wifi && _wifi->isConnected()) {
         handleOTA();

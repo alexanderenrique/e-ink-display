@@ -259,22 +259,21 @@ def pop_next_slide(device_id: str | None) -> dict[str, Any] | None:
                 mutated = True
                 continue
             expiry_dt = parse_expires_datetime(item.get("expires_at"))
-            msg_cap = expiry_dt if expiry_dt is not None else (now + timedelta(hours=1))
-            hold_until = min(now + timedelta(hours=1), msg_cap)
             q.pop(0)
             mutated = True
             txt = item.get("text")
             lay = item.get("layout") or "default"
             if not isinstance(txt, str) or not txt.strip():
                 continue
-            epoch = int(hold_until.timestamp())
-            if mutated:
-                _persist_unlocked()
-            return {
+            slide: dict[str, Any] = {
                 "layout": str(lay),
                 "text": txt.strip(),
-                "display_hold_until_epoch": epoch,
             }
+            if expiry_dt is not None:
+                slide["display_hold_until_epoch"] = int(expiry_dt.timestamp())
+            if mutated:
+                _persist_unlocked()
+            return slide
         if mutated:
             _persist_unlocked()
         return None

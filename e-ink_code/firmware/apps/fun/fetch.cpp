@@ -17,6 +17,10 @@ static constexpr const char* kSpecialHoldNs = "fun_sp";
 static constexpr const char* kHoldKeyUntil = "u";
 static constexpr const char* kHoldKeyText = "t";
 static constexpr const char* kHoldKeyLayout = "l";
+static constexpr const char* kHoldKeyCycles = "c";
+static constexpr const char* kHoldKeyMode = "m";
+/** Show the same special slide for this many fun-app wake cycles (deep-sleep refreshes). */
+static constexpr uint8_t kSpecialHoldRefreshCycles = 2;
 
 static bool utcClockProbablyValid() {
     return time(nullptr) > kMinValidUtcEpoch;
@@ -30,18 +34,47 @@ static void clearSpecialHoldPrefs() {
     }
 }
 
-static void persistSpecialHold(const FunSlide& slide) {
-    if (slide.displayHoldUntilEpoch == 0 || slide.text.length() == 0) {
+static void persistSpecialHold(const FunSlide& slide, int displayMode) {
+    if (slide.text.length() == 0) {
         return;
     }
     Preferences prefs;
     if (!prefs.begin(kSpecialHoldNs, false)) {
         return;
     }
+    prefs.putUChar(kHoldKeyCycles, kSpecialHoldRefreshCycles);
+    if (displayMode >= 1 && displayMode <= 4) {
+        prefs.putUChar(kHoldKeyMode, static_cast<uint8_t>(displayMode));
+    }
     prefs.putUInt(kHoldKeyUntil, slide.displayHoldUntilEpoch);
     prefs.putString(kHoldKeyText, slide.text);
     prefs.putString(kHoldKeyLayout, slide.layout.length() > 0 ? slide.layout : String("default"));
     prefs.end();
+}
+
+uint8_t specialHoldRefreshCyclesRemaining() {
+    Preferences prefs;
+    if (!prefs.begin(kSpecialHoldNs, true)) {
+        return 0;
+    }
+    uint8_t cycles = prefs.getUChar(kHoldKeyCycles, 0);
+    prefs.end();
+    return cycles;
+}
+
+void applySpecialHoldDisplayMode(int& displayMode) {
+    if (specialHoldRefreshCyclesRemaining() == 0) {
+        return;
+    }
+    Preferences prefs;
+    if (!prefs.begin(kSpecialHoldNs, true)) {
+        return;
+    }
+    int pinned = static_cast<int>(prefs.getUChar(kHoldKeyMode, 0));
+    prefs.end();
+    if (pinned >= 1 && pinned <= 4) {
+        displayMode = pinned;
+    }
 }
 
 namespace {
@@ -203,27 +236,29 @@ void syncFunClockForSpecialHold() {
 }
 
 bool loadHeldSpecialSlide(FunSlide& out) {
-    if (!utcClockProbablyValid()) {
-        return false;
-    }
-    time_t nowSecs = time(nullptr);
     Preferences prefs;
     if (!prefs.begin(kSpecialHoldNs, true)) {
         return false;
     }
+    uint8_t cycles = prefs.getUChar(kHoldKeyCycles, 0);
     uint32_t until = prefs.getUInt(kHoldKeyUntil, 0);
     String txt = prefs.getString(kHoldKeyText, "");
     String lay = prefs.getString(kHoldKeyLayout, "default");
     prefs.end();
 
-    if (until == 0 || txt.length() == 0) {
+    if (cycles == 0 || txt.length() == 0) {
         return false;
     }
 
-    uint32_t nowU = static_cast<uint32_t>(nowSecs);
-    if (nowU >= until) {
-        clearSpecialHoldPrefs();
-        return false;
+    if (until != 0) {
+        if (!utcClockProbablyValid()) {
+            return false;
+        }
+        uint32_t nowU = static_cast<uint32_t>(time(nullptr));
+        if (nowU >= until) {
+            clearSpecialHoldPrefs();
+            return false;
+        }
     }
 
     out.text = txt;
@@ -232,6 +267,26 @@ bool loadHeldSpecialSlide(FunSlide& out) {
     out.layout.toLowerCase();
     out.displayHoldUntilEpoch = until;
     return true;
+}
+
+void consumeSpecialHoldCycle() {
+    Preferences prefs;
+    if (!prefs.begin(kSpecialHoldNs, false)) {
+        return;
+    }
+    uint8_t cycles = prefs.getUChar(kHoldKeyCycles, 0);
+    if (cycles == 0) {
+        prefs.end();
+        return;
+    }
+    cycles--;
+    if (cycles == 0) {
+        prefs.end();
+        clearSpecialHoldPrefs();
+        return;
+    }
+    prefs.putUChar(kHoldKeyCycles, cycles);
+    prefs.end();
 }
 
 void initI2C() {
@@ -342,7 +397,7 @@ bool fetchMixedFunSlide(FunSlide& out) {
     return funSlideFromJson(first, out);
 }
 
-bool fetchSpecialSlide(FunSlide& out) {
+bool fetchSpecialSlide(FunSlide& out, int displayMode) {
     if (WiFi.status() != WL_CONNECTED) {
         return false;
     }
@@ -394,14 +449,7 @@ bool fetchSpecialSlide(FunSlide& out) {
     if (!funSlideFromJson(doc.as<JsonObjectConst>(), out)) {
         return false;
     }
-    // Older servers: hold for one UTC hour locally (still capped server-side when possible).
-    if (out.displayHoldUntilEpoch == 0 && utcClockProbablyValid()) {
-        time_t deadline = time(nullptr) + static_cast<time_t>(3600);
-        out.displayHoldUntilEpoch = static_cast<uint32_t>(deadline);
-    }
-    if (out.displayHoldUntilEpoch != 0) {
-        persistSpecialHold(out);
-    }
+    persistSpecialHold(out, displayMode);
     return true;
 }
 

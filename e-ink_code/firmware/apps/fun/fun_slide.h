@@ -7,7 +7,7 @@
 struct FunSlide {
     String layout;
     String text;
-    /** UNIX epoch UTC; from GET /v1/fun/special only; device holds slide until then. */
+    /** Optional UNIX epoch UTC cap from GET /v1/fun/special (message expires_at); not hold duration. */
     uint32_t displayHoldUntilEpoch = 0;
 };
 

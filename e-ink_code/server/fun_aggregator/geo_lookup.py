@@ -8,7 +8,7 @@ from pathlib import Path
 
 _EARTH_RADIUS_KM = 6371.0
 _DEG_TO_RAD = 0.017453292519943295
-_NEAR_THRESHOLD_KM = 600.0
+_NEAR_THRESHOLD_KM = 1000.0
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -47,7 +47,6 @@ def describe_nearest_place(lat: float, lon: float) -> str:
         if d < best_km:
             best_km = d
             best_label = str(p["label"])
-    dist_mi = best_km * 0.621371
     if best_km < _NEAR_THRESHOLD_KM:
         return f"Roughly near: {best_label}"
-        return f"~{dist_mi:.0f} miles from {best_label}"
+    return "middle of nowhere"
